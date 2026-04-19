@@ -1,45 +1,44 @@
-// تعريف الموديلات الفرعية (Sub-modules) لضمان تنظيم الكود
+// تعريف الموديلات الفرعية لضمان تنظيم الكود
 pub mod bitlinear;
 pub mod moe;
 pub mod mamba;
 
 use crate::layers::bitlinear::ZumarBitLinear;
 use crate::layers::moe::ZumarMoE;
-use crate::layers::mamba::{ZumarMambaBlock, ZumarMambaConfig}; // استيراد المكونات الجديدة
-use candle_core::{Tensor, Result, Device, DType};
+use crate::layers::mamba::{ZumarMambaBlock, ZumarMambaConfig};
+use candle_core::{Tensor, Result};
 use candle_nn::{Module, VarBuilder};
 
 /// ZumarBlock: الوحدة الهيكلية الأساسية للهجين (Hybrid) في زُمَر.
-/// تجمع بين معالجة السياق (Mamba SSM) وكفاءة الخبراء (Sparse MoE).
 pub struct ZumarBlock {
     pub pre_norm: ZumarBitLinear,
-    pub mamba_layer: ZumarMambaBlock, // طبقة معالجة السياق الطويل
-    pub moe_layer: ZumarMoE,          // طبقة الذكاء المتشعب
+    pub mamba_layer: ZumarMambaBlock, 
+    pub moe_layer: ZumarMoE,          
     pub post_norm: ZumarBitLinear,
 }
 
 impl ZumarBlock {
-    /// إنشاء بلوك جديد مع دمج طبقة Mamba و MoE.
-    pub fn new(in_dim: usize, out_dim: usize, device: &Device) -> Result<Self> {
-        // 1. طبقة التثبيت الأولي
-        let pre_norm = ZumarBitLinear::new(in_dim, in_dim, device)?;
+    /// إنشاء بلوك جديد وتوزيع الأوزان عبر VarBuilder.
+    pub fn new(in_dim: usize, out_dim: usize, vs: VarBuilder) -> Result<Self> {
+        // 1. طبقة التثبيت الأولي (أوزان مخصصة للـ pre_norm)
+        let pre_norm = ZumarBitLinear::new(in_dim, in_dim, vs.pp("pre_norm"))?;
         
-        // 2. إعداد طبقة Mamba (Task 1.2)
-        // نستخدم VarBuilder لإنشاء مصفوفات الحالة (A, D, etc.)
-        let vs_mamba = VarBuilder::zeros(DType::F32, device);
+        // 2. إعداد طبقة Mamba
         let mamba_cfg = ZumarMambaConfig {
             d_model: in_dim,
             d_state: 16,
             d_conv: 4,
             expand: 2,
         };
-        let mamba_layer = ZumarMambaBlock::new(&mamba_cfg, vs_mamba.pp("mamba"))?;
+        // نمرر vs.pp("mamba") لتأخذ أوزانها المستقلة
+        let mamba_layer = ZumarMambaBlock::new(&mamba_cfg, vs.pp("mamba"))?;
 
         // 3. طبقة الخبراء المتشعبة (Sparse Mixture of Experts)
-        let moe_layer = ZumarMoE::new(in_dim, 8, 2, device)?;
+        // نمرر vs.pp("moe") لتوزيع الأوزان على الخبراء داخلياً
+        let moe_layer = ZumarMoE::new(in_dim, 8, 2, vs.pp("moe"))?;
         
-        // 4. طبقة التثبيت النهائي وتغيير الأبعاد
-        let post_norm = ZumarBitLinear::new(in_dim, out_dim, device)?;
+        // 4. طبقة التثبيت النهائي
+        let post_norm = ZumarBitLinear::new(in_dim, out_dim, vs.pp("post_norm"))?;
 
         Ok(Self {
             pre_norm,
@@ -55,11 +54,10 @@ impl Module for ZumarBlock {
         // 1. Pre-processing
         let x = self.pre_norm.forward(x)?;
 
-        // 2. Mamba Selective Scan (معالجة تسلسل البيانات والسياق)
-        // هنا يكمن سر التفوق في التعامل مع النصوص الطويلة
+        // 2. Mamba Selective Scan
         let x = self.mamba_layer.forward(&x)?;
 
-        // 3. Sparse MoE (تفعيل الخبراء المطلوبين فقط)
+        // 3. Sparse MoE
         let x = self.moe_layer.forward(&x)?;
 
         // 4. Post-processing

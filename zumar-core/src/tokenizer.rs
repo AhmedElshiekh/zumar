@@ -22,6 +22,7 @@ impl ZumarTokenizer {
         Tensor::new(ids, device)?.reshape((1, ids.len()))
     }
 
+    #[allow(dead_code)]
     pub fn decode(&self, ids: &[u32]) -> Result<String> {
         self.tokenizer.decode(ids, true)
             .map_err(|e| candle_core::Error::Msg(e.to_string()))

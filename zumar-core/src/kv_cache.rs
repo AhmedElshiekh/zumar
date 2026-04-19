@@ -24,7 +24,8 @@ impl KVCache {
         self.v = Some(v.clone());
         Ok((k, v))
     }
-
+  
+    #[allow(dead_code)]
     pub fn reset(&mut self) {
         self.k = None;
         self.v = None;
