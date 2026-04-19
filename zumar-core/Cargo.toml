@@ -12,7 +12,7 @@ candle-transformers = { workspace = true }
 
 # دعم BitNet و 1-bit Inference
 # سنستخدم مكتبة مخصصة للحسابات المنطقية السريعة
-bitnet-rs = { version = "0.5" } 
+bitnet-rs = "0.1.0" 
 
 # تقنيات Mamba و SSM
 mamba-rs = { version = "0.3" }
