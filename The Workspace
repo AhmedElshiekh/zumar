@@ -1,7 +1,25 @@
 zumar/
 ├── zumar-core/          # المحرك الأساسي (Rust + Candle)
+│   ├── src/
+│   │   ├── layers/            <-- مجلد الطبقات
+│   │   │   ├── mod.rs         <-- الملف الجديد (يربط الطبقات معاً)
+│   │   │   ├── bitlinear.rs   <-- طبقة الـ 1-bit
+│   │   │   ├── snn.rs         <-- طبقة النبضات العصبية
+│   │   │   ├── attention.rs
+│   │   │   ├── packing.rs
+│   │   │   └─── mamba.rs       <-- معمارية Mamba
+│   │   ├──  kernels/           <-- مجلد كود CUDA 
+│   │   │   ├── bitnet_kernel.cu
+│   │   │   └── mods.rs
+│   │   └── main.rs            <-- نقطة الانطلاق
+│   ├── build.rs
+│   └── Cargo.toml
+
 ├── zumar-bridge/        # جسر التوافق (API Proxy)
 ├── zumar-desktop/       # واجهة الديسكتوب (Tauri)
 ├── zumar-mobile/        # تطبيق الموبايل (Flutter)
 ├── Cargo.toml           # إعدادات الـ Workspace
+├── The Workspace
+├── ROADMAP.md            # الملف الذي صممناه
+├── README.a4.md         # الملف الذي صممناه بالعربيه
 └── README.md            # الملف الذي صممناه
