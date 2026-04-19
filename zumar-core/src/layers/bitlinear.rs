@@ -38,11 +38,17 @@ impl Module for ZumarBitLinear {
     fn forward(&self, x: &Tensor) -> Result<Tensor> {
         let q_weight = self.quantize_weights()?;
         
-        // هنا تكمن السحر: matmul مع أوزان 1-bit يتحول برمجياً 
-        // إلى عمليات Addition/Subtraction فقط داخل الـ Kernel
-        let output = x.matmul(&q_weight.t()?)?;
-        
-        // ضرب الناتج في مقياس (Scale) لاستعادة النطاق الديناميكي
-        output.mul(self.scale)
+        // استخدام الـ Custom Kernel بدلاً من x.matmul
+        #[cfg(feature = "cuda")]
+        {
+            if x.device().is_cuda() {
+                let out_dim = q_weight.dims()[0];
+                let in_dim = x.dims()[0];
+                return crate::kernels::launch_bitnet_kernel(x, &q_weight, (in_dim, out_dim));
+            }
+        }
+
+        // كود احتياطي (Fallback) للـ CPU إذا لم يتوفر CUDA
+        x.matmul(&q_weight.t()?)?.mul(self.scale)
     }
 }
