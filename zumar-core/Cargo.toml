@@ -26,7 +26,7 @@ half = { version = "2.4", features = ["num-traits", "use-intrinsics"] }
 tokenizers = "0.20"
 
 [features]
-default = ["cuda"]
+default = []
 cuda = ["candle-core/cuda", "candle-nn/cuda"]
 metal = ["candle-core/metal"] # دعم أجهزة Mac M3/M4/M5
 accelerate = ["candle-core/accelerate"]

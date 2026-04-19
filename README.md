@@ -1,4 +1,4 @@
-# 🌌 ZUMAR (زُمَر)
+# 🌌 ZUMAR 
 ### *Collective Intelligence. Sovereign Control.*
 
 <p align="center">
@@ -17,12 +17,12 @@
 
 ## 🧬 Core Model Technologies
 
-| Feature | Icon | Description |
-| :--- | :---: | :--- |
-| **1-Bit Precision** | ⚡ | Utilizing **BitNet b1.58** to replace matrix multiplication with simple logical addition, enabling massive models to run on consumer RAM. |
-| **Mamba SSM** | 🐍 | State Space Model architecture for linear $O(L)$ complexity, handling infinite contexts without the quadratic slowdown of Transformers. |
-| **Titans Memory** | 🏛️ | A dynamic neural memory layer that allows the model to learn and evolve from your interactions in real-time. |
-| **SNN Logic** | 🔋 | Spiking Neural Network integration for ultra-low power consumption, keeping your mobile devices cool during inference. |
+| Feature | Description |
+| :--- | :--- |
+| **1-Bit Precision** | ⚡ Utilizing **BitNet b1.58** to replace matrix multiplication with simple logical addition, enabling massive models to run on consumer RAM. |
+| **Mamba SSM** | 🐍 State Space Model architecture for linear $O(L)$ complexity, handling infinite contexts without the quadratic slowdown of Transformers. |
+| **Titans Memory** | 🏛 A dynamic neural memory layer that allows the model to learn and evolve from your interactions in real-time. |
+| **SNN Logic** | 🔋 Spiking Neural Network integration for ultra-low power consumption, keeping your mobile devices cool during inference. |
 
 ---
 
