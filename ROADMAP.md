@@ -20,7 +20,7 @@
 ### 🏗️ المرحلة 1: النواة والسيادة (The Rust Core & Universal Bridge)
 *الهدف: بناء "المخ" المخصص ونظام التوافق الشامل.*
 
-- [ ] **Task 1.1: محرك الاستدلال السيادي (Core Inference)**
+- [x] **Task 1.1: محرك الاستدلال السيادي (Core Inference)**
     - تنفيذ تكميم **1-bit** الحقيقي باستخدام `cudarc` و `Custom Kernels`.
     - دمج **Flash-Attention 3** لتحقيق أقصى استفادة من كروت P40.
 - [ ] **Task 1.2: معمارية Mamba & SNN**
