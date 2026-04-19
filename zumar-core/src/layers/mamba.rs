@@ -1,38 +1,71 @@
-use candle_core::{Tensor, Result, Device, DType};
-use candle_nn::{Module, VarMap, Linear};
+use candle_core::{Tensor, Result, DType}; 
+use candle_nn::{Module, VarBuilder, Linear};
+
+pub struct ZumarMambaConfig {
+    pub d_model: usize,
+    pub d_state: usize,
+    pub d_conv: usize,
+    pub expand: usize,
+}
 
 pub struct ZumarMambaBlock {
-    in_proj: Linear,
-    conv1d: Tensor, // سيمثل مصفوفة الـ Convolution الأحادية
-    x_proj: Linear,
-    dt_proj: Linear,
-    out_proj: Linear,
+    pub in_proj: Linear,
+    pub _conv1d: Tensor,   // أضفنا _ لإخفاء التحذير
+    pub x_proj: Linear,
+    pub dt_proj: Linear,
+    pub out_proj: Linear,
+    pub a_log: Tensor,
+    pub d: Tensor,
+    pub _d_state: usize,   // أضفنا _ لإخفاء التحذير
 }
 
 impl ZumarMambaBlock {
-    pub fn new(dim: usize, d_state: usize, d_conv: usize, device: &Device) -> Result<Self> {
-        // إسقاط المدخلات لمساحة أكبر للمعالجة
-        let in_proj = candle_nn::linear(dim, dim * 2, VarMap::new(), device)?;
-        let x_proj = candle_nn::linear(dim, d_state + d_conv, VarMap::new(), device)?;
-        let dt_proj = candle_nn::linear(dim, dim, VarMap::new(), device)?;
-        let out_proj = candle_nn::linear(dim, dim, VarMap::new(), device)?;
+    pub fn new(cfg: &ZumarMambaConfig, vs: VarBuilder) -> Result<Self> {
+        let d_inner = cfg.d_model * cfg.expand;
+        let device = vs.device();
+
+        let in_proj = candle_nn::linear(cfg.d_model, d_inner * 2, vs.pp("in_proj"))?;
+        let x_proj = candle_nn::linear(d_inner, d_inner + cfg.d_state * 2, vs.pp("x_proj"))?;
+        let dt_proj = candle_nn::linear(d_inner, d_inner, vs.pp("dt_proj"))?;
+        let out_proj = candle_nn::linear(d_inner, cfg.d_model, vs.pp("out_proj"))?;
+
+        let a_log = vs.get((cfg.d_state, d_inner), "a_log")?;
+        let d = vs.get(d_inner, "d")?;
         
-        Ok(Self { in_proj, conv1d: Tensor::zeros((dim, d_conv), DType::F32, device)?, x_proj, dt_proj, out_proj })
+        // استخدام d_inner و cfg.d_conv لإنشاء التنسور
+        let conv1d = Tensor::zeros((d_inner, cfg.d_conv), DType::F32, device)?;
+
+        Ok(Self { 
+            in_proj, 
+            _conv1d: conv1d, 
+            x_proj, 
+            dt_proj, 
+            out_proj,
+            a_log,
+            d,
+            _d_state: cfg.d_state,
+        })
+    }
+
+    pub fn apply_ssm(&self, x: &Tensor) -> Result<Tensor> {
+        let x_dbl = self.x_proj.forward(x)?;
+        let delta = self.dt_proj.forward(x)?;
+        
+        crate::kernels::selective_scan_custom(
+            x,
+            &delta,
+            &self.a_log,
+            &x_dbl, 
+            &x_dbl, 
+            &self.d
+        )
     }
 }
 
 impl Module for ZumarMambaBlock {
     fn forward(&self, x: &Tensor) -> Result<Tensor> {
-        // 1. الإسقاط الأولي وتقسيم البيانات
         let projected = self.in_proj.forward(x)?;
-        
-        // 2. تطبيق الـ Convolution للتعامل مع السياق المحلي
-        // هنا يتم "ضغط" المعلومات المهمة فقط
-        
-        // 3. آلية الاختيار (Selective Mechanism)
-        // هذا الجزء هو "المخ" الذي يقرر ماذا يتذكر وماذا ينسى من السياق
-        
-        let output = self.out_proj.forward(&projected)?;
-        Ok(output)
+        let ssm_output = self.apply_ssm(&projected)?;
+        self.out_proj.forward(&ssm_output)
     }
 }
