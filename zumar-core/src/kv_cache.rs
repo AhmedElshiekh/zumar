@@ -1,4 +1,4 @@
-use candle_core::{Tensor, Device, Result};
+use candle_core::{Tensor, Result};
 
 pub struct KVCache {
     pub k: Option<Tensor>,

@@ -1,7 +1,10 @@
 use candle_core::Device;
 
+#[allow(dead_code)]
+
 pub enum WorkloadIntensity {
     Low,    // مهام بسيطة (تصحيح لغوي، ردود قصيرة)
+    Medium,
     High,   // مهام ثقيلة (كتابة كود، تحليل ملفات ضخمة)
 }
 

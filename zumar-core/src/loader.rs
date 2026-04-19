@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 use candle_core::{Device, Result};
-use crate::config::ZumarConfig;
+//use crate::config::ZumarConfig;
 
 pub struct ZumarLoader {
     base_path: PathBuf,
