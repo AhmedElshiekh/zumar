@@ -1,0 +1,7 @@
+zumar/
+├── zumar-core/          # المحرك الأساسي (Rust + Candle)
+├── zumar-bridge/        # جسر التوافق (API Proxy)
+├── zumar-desktop/       # واجهة الديسكتوب (Tauri)
+├── zumar-mobile/        # تطبيق الموبايل (Flutter)
+├── Cargo.toml           # إعدادات الـ Workspace
+└── README.md            # الملف الذي صممناه

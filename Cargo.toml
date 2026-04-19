@@ -1,6 +1,20 @@
-[package]
-name = "zumar"
-version = "0.1.0"
-edition = "2024"
+[workspace]
+resolver = "2"
+members = [
+    "zumar-core",
+    "zumar-bridge",
+    "zumar-desktop",
+]
 
-[dependencies]
+[workspace.package]
+version = "2.2.0"
+edition = "2024" # أحدث إصدار مستقر في 2026
+authors = ["Ahmed Elshiekh <ahmedel.sh50@gmail.com>"]
+license = "Apache-2.0"
+
+[workspace.dependencies]
+# توحيد نسخ المكتبات لضمان التوافق بين النواة والجسر
+candle-core = { version = "0.9.0" } # النسخة الأحدث في 2026
+tokio = { version = "1.40", features = ["full"] }
+anyhow = "1.0"
+tracing = "0.1"

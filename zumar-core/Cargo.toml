@@ -1,0 +1,32 @@
+[package]
+name = "zumar-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+# المحرك الأساسي (Candle 2026 Optimized)
+candle-core = { workspace = true }
+candle-nn = { workspace = true }
+candle-transformers = { workspace = true }
+
+# دعم BitNet و 1-bit Inference
+# سنستخدم مكتبة مخصصة للحسابات المنطقية السريعة
+bitnet-rs = { version = "0.5" } 
+
+# تقنيات Mamba و SSM
+mamba-rs = { version = "0.3" }
+
+# التواصل والشبكات السيادية
+iroh = { version = "0.25" } # أحدث إصدار لعام 2026
+
+# إدارة الأوزان والذاكرة
+safetensors = "0.5"
+half = { version = "2.4", features = ["num-traits", "use-intrinsics"] }
+tokenizers = "0.20"
+
+[features]
+default = ["cuda"]
+cuda = ["candle-core/cuda", "candle-nn/cuda"]
+metal = ["candle-core/metal"] # دعم أجهزة Mac M3/M4/M5
+accelerate = ["candle-core/accelerate"]
