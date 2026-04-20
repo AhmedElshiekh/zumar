@@ -1,9 +1,9 @@
 [workspace]
 resolver = "2"
 members = [
-    "zumar-core",
-    "zumar-bridge",
-    "zumar-desktop",
+    "core",
+    "bridge",
+    "desktop",
 ]
 
 [workspace.package]

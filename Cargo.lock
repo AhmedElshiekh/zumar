@@ -380,6 +380,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "102dbef1187b1893e6dfe05a774e79fd52265f49f214f6879c8ff49f52c8188b"
 
 [[package]]
+name = "bridge"
+version = "2.2.0"
+dependencies = [
+ "axum",
+ "core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tower-http 0.5.2",
+ "tracing",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.20.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -646,6 +659,23 @@ checksum = "688d7fbb8092b8de775ef2536f36c8c31f2bc4006ece2e8d8ad2d17d00ce0a2a"
 dependencies = [
  "loom",
  "tracing",
+]
+
+[[package]]
+name = "core"
+version = "2.2.0"
+dependencies = [
+ "bitnet-rs",
+ "candle-core",
+ "candle-nn",
+ "candle-transformers",
+ "half",
+ "iroh",
+ "mamba-rs",
+ "safetensors 0.5.3",
+ "serde",
+ "tokenizers",
+ "tokio",
 ]
 
 [[package]]
@@ -993,6 +1023,10 @@ dependencies = [
  "syn 2.0.117",
  "unicode-xid",
 ]
+
+[[package]]
+name = "desktop"
+version = "2.2.0"
 
 [[package]]
 name = "diatomic-waker"
@@ -7150,37 +7184,3 @@ name = "zmij"
 version = "1.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b8848ee67ecc8aedbaf3e4122217aff892639231befc6a1b58d29fff4c2cabaa"
-
-[[package]]
-name = "zumar-bridge"
-version = "2.2.0"
-dependencies = [
- "axum",
- "serde",
- "serde_json",
- "tokio",
- "tower-http 0.5.2",
- "tracing",
- "zumar-core",
-]
-
-[[package]]
-name = "zumar-core"
-version = "2.2.0"
-dependencies = [
- "bitnet-rs",
- "candle-core",
- "candle-nn",
- "candle-transformers",
- "half",
- "iroh",
- "mamba-rs",
- "safetensors 0.5.3",
- "serde",
- "tokenizers",
- "tokio",
-]
-
-[[package]]
-name = "zumar-desktop"
-version = "2.2.0"

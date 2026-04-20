@@ -1,5 +1,5 @@
 [package]
-name = "zumar-bridge"
+name = "bridge"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -7,7 +7,7 @@ license.workspace = true
 
 
 [dependencies]
-zumar-core = { path = "../zumar-core" }
+core = { path = "../core" }
 axum = "0.7"         # خادم الويب السريع
 tokio = { workspace = true, features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
