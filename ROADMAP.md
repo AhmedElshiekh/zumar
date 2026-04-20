@@ -29,9 +29,9 @@
 - [x] **Task 1.3: توزيع الأوزان والـ Sparse MoE**
     - [x] تنفيذ هيكل الخبراء المتعددين (Experts) والموجه (Router).
     - [x] التحقق من نجاح الـ Forward Pass الهجين (Output Shape: [1, 10, 768]).
-- [ ] **Task 1.4: جسر التوافق الشامل (Universal Proxy Bridge)**
-    - [ ] بناء خادم HTTP بـ Rust (Axum) يحاكي بروتوكول OpenAI.
-    - [ ] ربط محرك التوليد (Generation Loop) بالجسر لتمكين المحركات الخارجية من استخدامه.
+- [x] **Task 1.4: جسر التوافق الشامل (Universal Proxy Bridge)**
+    - [x] بناء خادم HTTP بـ Rust (Axum) يحاكي بروتوكول OpenAI.
+    - [x] ربط محرك التوليد (Generation Loop) بالجسر لتمكين المحركات الخارجية من استخدامه.
 
 ---
 

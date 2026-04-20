@@ -5,6 +5,7 @@ pub struct KVCache {
     pub v: Option<Tensor>,
 }
 
+#[allow(dead_code)]
 impl KVCache {
     pub fn new() -> Self {
         Self { k: None, v: None }

@@ -1,5 +1,5 @@
 zumar/
-├── zumar-core/          # المحرك الأساسي (Rust + Candle)
+├── core/          # المحرك الأساسي (Rust + Candle)
 │   ├── src/
 │   │   ├── layers/            <-- مجلد الطبقات
 │   │   │   ├── mod.rs         <-- الملف الجديد (يربط الطبقات معاً)
@@ -7,17 +7,37 @@ zumar/
 │   │   │   ├── snn.rs         <-- طبقة النبضات العصبية
 │   │   │   ├── attention.rs
 │   │   │   ├── packing.rs
+│   │   │   ├── moe.rs
 │   │   │   └─── mamba.rs       <-- معمارية Mamba
-│   │   ├──  kernels/           <-- مجلد كود CUDA 
+│   │   ├── kernels/           <-- مجلد كود CUDA 
 │   │   │   ├── bitnet_kernel.cu
 │   │   │   └── mods.rs
+│   │   ├── contig.rs
+│   │   ├── kv_cache.rs
+│   │   ├── loader.rs
+│   │   ├── routing.rs
+│   │   ├── tokenizer.rs
+│   │   ├── train.rs
 │   │   └── main.rs            <-- نقطة الانطلاق
+│   │   
+│   ├── weights
+│   │   ├── .safetensors
+│   │   └── tokenizer.json
+│   │   
 │   ├── build.rs
 │   └── Cargo.toml
-
-├── zumar-bridge/        # جسر التوافق (API Proxy)
-├── zumar-desktop/       # واجهة الديسكتوب (Tauri)
-├── zumar-mobile/        # تطبيق الموبايل (Flutter)
+│   
+├── bridge/        # جسر التوافق (API Proxy)
+│   ├── src/
+│   │   └── main.rs 
+│   └── Cargo.toml
+│   
+├── desktop/       # واجهة الديسكتوب (Tauri)
+│   ├── src/
+│   │   └── main.rs 
+│   └── Cargo.toml
+│   
+├── mobile/        # تطبيق الموبايل (Flutter)
 ├── Cargo.toml           # إعدادات الـ Workspace
 ├── The Workspace
 ├── ROADMAP.md            # الملف الذي صممناه
