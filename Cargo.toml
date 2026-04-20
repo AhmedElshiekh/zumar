@@ -23,3 +23,5 @@ tracing = "0.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokenizers = "0.19.0" 
+intel-mkl-src = { version = "0.8.1" }
+openblas-src = { version = "0.10", features = ["static"] }

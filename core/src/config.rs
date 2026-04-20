@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct ZumarConfig {
     pub vocab_size: usize,      // حجم القاموس (عدد الكلمات التي يعرفها)
     pub hidden_size: usize,     // حجم الأبعاد الداخلية (مثل 768 أو 4096)

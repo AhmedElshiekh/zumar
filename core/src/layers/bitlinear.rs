@@ -1,10 +1,12 @@
+//use candle_core::{Result, Tensor, Device, Shape};
 use candle_core::{Result, Tensor};
 use candle_nn::{Module, VarBuilder};
+use crate::kernels; // استدعاء الموديول الخاص بالكيرنالات
 
 pub struct ZumarBitLinear {
-    weight: Tensor,
-    _bias: Option<Tensor>,
-    scale: Tensor, 
+    weight: Tensor, // مخزنة كـ {-1, 0, 1} ولكن بنوع f32 حالياً
+    bias: Option<Tensor>,
+    scale: Tensor,
 }
 
 impl ZumarBitLinear {
@@ -12,53 +14,49 @@ impl ZumarBitLinear {
         let raw_weight = vs.get((out_dim, in_dim), "weight")?;
         let device = vs.device();
 
+        // حساب الـ Scale بناءً على متوسط القيم
         let mean_abs = raw_weight.abs()?.mean_all()?.to_scalar::<f32>()?;
-        let scale_val = mean_abs.max(1e-5); 
+        let scale_val = mean_abs.max(1e-5);
         let scale_tensor = Tensor::new(scale_val, device)?;
 
+        // تكميم الأوزان إلى {-1, 0, 1}
         let quantized_weight = (raw_weight.broadcast_div(&scale_tensor)?
             .round()?
             .clamp(-1.0, 1.0))?;
 
-        Ok(Self { 
-            weight: quantized_weight, 
-            _bias: None, 
-            scale: scale_tensor 
+        Ok(Self {
+            weight: quantized_weight,
+            bias: None,
+            scale: scale_tensor,
         })
-    }
-
-    pub fn _update_quantization(&mut self, new_weight: Tensor) -> Result<()> {
-        let mean_abs = new_weight.abs()?.mean_all()?.to_scalar::<f32>()?;
-        self.scale = Tensor::new(mean_abs.max(1e-5), new_weight.device())?;
-        self.weight = (new_weight.broadcast_div(&self.scale)?
-            .round()?
-            .clamp(-1.0, 1.0))?;
-        Ok(())
     }
 }
 
 impl Module for ZumarBitLinear {
     fn forward(&self, x: &Tensor) -> Result<Tensor> {
-        // x: [Batch, Seq, Hidden] -> [1, 10, 768]
-        // نحن بحاجة لتحويله إلى [Batch * Seq, Hidden] -> [10, 768]
-        let shape = x.shape();
-        let dims = shape.dims();
-        
-        // استخراج الأبعاد ديناميكياً
-        let (b, s, h) = (dims[0], dims[1], dims[2]);
-
-        // 1. تسطيح الأبعاد الأولى لضمان توافق Matmul
+        let (b, s, h) = x.dims3()?;
         let x_flat = x.reshape((b * s, h))?;
+
+        // --- [ نقطة التحول للسرعة: استدعاء الكيرنال ] ---
         
-        // 2. تنفيذ الضرب: [10, 768] * [768, Out] = [10, Out]
-        let w_t = self.weight.t()?;
-        let res_flat = x_flat.matmul(&w_t)?;
+        let res = if x.device().is_cuda() {
+            // إذا كان الجهاز CUDA، نستخدم الكيرنال المخصص الذي يعالج العمليات كـ Integers
+            // هذا سيعوض x_flat.matmul(&self.weight.t()?)
+            kernels::bitnet_matmul(&x_flat, &self.weight)?
+        } else {
+            // إذا كان على الـ CPU، نستخدم Matmul المحسن للـ Native CPU
+            x_flat.matmul(&self.weight.t()?)?
+        };
+
+        // إعادة التشكيل وتطبيق الـ Scale
+        let out_dim = self.weight.dim(0)?;
+        let res = res.reshape((b, s, out_dim))?;
         
-        // 3. إعادة التنسور لأبعاده الأصلية: [1, 10, Out]
-        let out_dim = w_t.dim(1)?;
-        let res = res_flat.reshape((b, s, out_dim))?;
-        
-        // 4. تطبيق الـ Scale
-        res.broadcast_mul(&self.scale)
+        let res = res.broadcast_mul(&self.scale)?;
+
+        match &self.bias {
+            Some(b) => res.broadcast_add(b),
+            None => Ok(res),
+        }
     }
 }

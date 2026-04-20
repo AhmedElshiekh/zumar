@@ -9,6 +9,8 @@ authors.workspace = true
 candle-core = { workspace = true }
 candle-nn = { workspace = true }
 candle-transformers = { workspace = true }
+#intel-mkl-src = { workspace = true , optional = true }
+openblas-src = { workspace = true , optional = true}
 
 # دعم BitNet و 1-bit Inference
 # سنستخدم مكتبة مخصصة للحسابات المنطقية السريعة
@@ -19,6 +21,7 @@ mamba-rs = { version = "0.3" }
 
 # التواصل والشبكات السيادية
 iroh = { version = "0.25" } # أحدث إصدار لعام 2026
+
 
 # إدارة الأوزان والذاكرة
 safetensors = "0.5"
@@ -32,3 +35,5 @@ default = []
 cuda = ["candle-core/cuda", "candle-nn/cuda"]
 metal = ["candle-core/metal"] # دعم أجهزة Mac M3/M4/M5
 accelerate = ["candle-core/accelerate"]
+#mkl = ["dep:intel-mkl-src", "candle-core/mkl", "candle-nn/mkl"]
+blas = ["dep:openblas-src"]

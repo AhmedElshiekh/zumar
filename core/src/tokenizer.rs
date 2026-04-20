@@ -12,7 +12,8 @@ impl ZumarTokenizer {
         Ok(Self { tokenizer })
     }
 
-    /// يحول النص إلى Tensor من الـ IDs
+  /// يحول النص إلى Tensor من الـ IDs
+    #[allow(dead_code)]
     pub fn encode(&self, text: &str, device: &Device) -> Result<Tensor> {
         let encoding = self.tokenizer.encode(text, true)
             .map_err(|e| candle_core::Error::Msg(e.to_string()))?;
@@ -20,8 +21,9 @@ impl ZumarTokenizer {
         let ids = encoding.get_ids();
         Tensor::new(ids, device)
     }
-
-    /// يحول رقم (ID) واحد أو مجموعة أرقام إلى نص
+    
+    
+  /// يحول رقم (ID) واحد أو مجموعة أرقام إلى نص
     pub fn decode(&self, ids: &[u32]) -> Result<String> {
         self.tokenizer.decode(ids, true)
             .map_err(|e| candle_core::Error::Msg(e.to_string()))
