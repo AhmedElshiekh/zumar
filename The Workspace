@@ -1,5 +1,10 @@
 zumar/
 ├── core/          # المحرك الأساسي (Rust + Candle)
+│   ├── injection/
+│   │   ├── distill_to_zumar.py
+│   │   ├── generate_weights.py
+│   │   └── get_tokenizer.py
+│   │   
 │   ├── src/
 │   │   ├── layers/            <-- مجلد الطبقات
 │   │   │   ├── mod.rs         <-- الملف الجديد (يربط الطبقات معاً)
@@ -8,7 +13,7 @@ zumar/
 │   │   │   ├── attention.rs
 │   │   │   ├── packing.rs
 │   │   │   ├── moe.rs
-│   │   │   └─── mamba.rs       <-- معمارية Mamba
+│   │   │   └── mamba.rs       <-- معمارية Mamba
 │   │   ├── kernels/           <-- مجلد كود CUDA 
 │   │   │   ├── bitnet_kernel.cu
 │   │   │   └── mods.rs
@@ -36,6 +41,14 @@ zumar/
 │   ├── src/
 │   │   └── main.rs 
 │   └── Cargo.toml
+│   
+├── models/       # ملف الاوزان
+│   ├── teacher/
+│   │   ├── model.safetensors
+│   │   └── tokenizer.json
+│   └── zumar-v1/
+│       ├──  model.safetensors
+│       └── tokenizer.json
 │   
 ├── mobile/        # تطبيق الموبايل (Flutter)
 ├── Cargo.toml           # إعدادات الـ Workspace
