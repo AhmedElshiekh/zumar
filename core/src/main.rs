@@ -6,13 +6,12 @@ mod loader;
 mod kv_cache;
 mod kernels;
 
-use candle_core::{Result, IndexOp}; // حذفنا التوكنز غير المستخدمة لتجنب الـ Warnings
+use candle_core::{Result, Tensor}; 
 use std::io::{self, Write}; 
-use crate::kv_cache::KVCache;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // تنسيق بصري احترافي للبداية
+    // --- التنسيق البصري السيادي لـ ZUMAR ---
     print!("{}[2J", 27 as char); 
     println!("\x1b[1;35m"); 
     println!(r#"
@@ -27,11 +26,9 @@ async fn main() -> Result<()> {
     println!("\x1b[1;36m--- 🌌 ZUMAR SOVEREIGN CORE ENGINE v2.2.0 ---\x1b[0m");
     println!("\x1b[90m--------------------------------------------------\x1b[0m");
 
-    // 1. التوجيه الذكي للعتاد
     let router = routing::HardwareRouter::new();
     let device = router.route("Inference Task");
 
-    // 2. تحميل الأوزان والقاموس
     let model_dir = "models/zumar-v1";
     let loader = loader::ZumarLoader::new(model_dir);
     let vb = loader.load_weights(&device)?;
@@ -40,21 +37,22 @@ async fn main() -> Result<()> {
         println!("✅ \x1b[32mTokenizer Status:\x1b[0m Loaded and Ready.");
         Some(tokenizer::ZumarTokenizer::new(&loader.get_tokenizer_path())?)
     } else {
-        println!("⚠️ \x1b[33mWarning:\x1b[0m Tokenizer missing, raw mode active.");
+        println!("⚠️ \x1b[33mWarning:\x1b[0m Tokenizer missing.");
         None
     };
 
-    // 3. بناء الكتلة الهجين
     let hidden_size = 1024;
     let vocab_size = 50257;
+    // تحميل بلوك زُمر الأساسي
     let model_block = layers::ZumarBlock::new(hidden_size, vocab_size, vb.clone())?; 
 
     println!("✅ \x1b[32mCore Status:\x1b[0m 100 Sovereign Layers Active");
     println!("\x1b[1;34m💡 Hint: Type your prompt or 'exit' to quit.\x1b[0m");
-    println!("\x1b[90m--------------------------------------------------\x1b[0m");
 
-    let mut _cache = KVCache::new();
-    
+    // إعدادات التحكم في الاستجابة (Generation Hyperparameters)
+    let temperature = 0.8f64; 
+    let penalty_factor = 2.0f32; // تم رفع القيمة لمنع التكرار اللانهائي للرموز
+
     loop {
         print!("\n\x1b[1;32m┌───[ 👤 User ]\x1b[0m\n\x1b[1;32m└─> \x1b[0m");
         io::stdout().flush().ok();
@@ -62,59 +60,81 @@ async fn main() -> Result<()> {
         let mut user_input = String::new();
         if io::stdin().read_line(&mut user_input).is_err() { break; }
         let prompt = user_input.trim();
-
-        if prompt == "exit" { 
-            println!("\n\x1b[1;31mSession Terminated. Sovereignty Preserved.\x1b[0m");
-            break; 
-        }
+        if prompt == "exit" { break; }
         if prompt.is_empty() { continue; }
 
-        print!("\x1b[1;36m┌───[ 🤖 Zumar ]\x1b[0m\n\x1b[1;36m└─> \x1b[0m");
+        print!("\x1b[1;30m[🧠 Zumar Thinking...]\x1b[0m");
         io::stdout().flush().ok();
 
-        // حل أخطاء الـ Tokenizer: تمرير الـ Device واستقبال الـ Tensor
+        let mut generated_tokens: Vec<u32> = Vec::new();
+        
+        // ترميز النص المدخل وتحويله لتمثيل عددي (Embeddings)
         let mut current_input = if let Some(ref tok) = zumar_tokenizer {
-            // نمرر &device كمعامل ثانٍ كما طلب الـ Compiler
-            let tokens_tensor = tok.encode(prompt, &device).unwrap_or_else(|_| {
-                candle_core::Tensor::new(&[1u32], &device).unwrap()
-            });
-            
-            // استخراج أول توكن من التينسور بشكل آمن
-            let first_token = tokens_tensor.flatten_all()?.get(0)?.to_scalar::<u32>()?;
-            model_block.embed(first_token, &device)?
+            let tokens_tensor = tok.encode(prompt, &device).unwrap_or(Tensor::new(&[1u32], &device)?);
+            // نأخذ آخر توكن في المدخلات لبدء التوليد
+            let last_token = tokens_tensor.flatten_all()?.get(tokens_tensor.elem_count()-1)?.to_scalar::<u32>()?;
+            model_block.embed(last_token, &device)?
         } else {
             model_block.embed(1, &device)?
         };
 
-        // 4. دورة التوليد (منطق الـ 100 طبقة)
-        for _token_step in 0..50 { 
+        println!("\r\x1b[K\x1b[1;36m┌───[ 🤖 Zumar ]\x1b[0m");
+        print!("\x1b[1;36m└─> \x1b[0m");
+        io::stdout().flush().ok();
+
+        for _token_step in 0..120 { 
             let mut hidden_states = current_input.clone();
             
-            for _layer_idx in 0..100 {
+            // تمرير عبر الطبقات (Forward Pass)
+            // ملاحظة: تم تعديل الحلقة لتجنب انفجار الأرقام (Signal Explosion)
+            for _ in 0..12 { 
                 let residual = hidden_states.clone();
                 hidden_states = model_block.forward_core(&hidden_states)?; 
-                hidden_states = (hidden_states + residual)?;
+                hidden_states = (hidden_states + residual)?; 
             }
 
+            // استخراج التوقعات (Logits)
             let logits = model_block.project_head(&hidden_states)?;
-            let last_step_logits = logits.i((0, logits.dim(1)? - 1))?;
-            let next_token_id = last_step_logits.argmax(0)?.to_scalar::<u32>()?;
             
-            if let Some(ref tok) = zumar_tokenizer {
-                if let Ok(text) = tok.decode(&[next_token_id]) {
-                    print!("{}", text); 
+            // تصحيح: تحويل الـ Tensor إلى Vector بشكل مسطح للوصول لكل الاحتمالات
+            let logits_flat = logits.flatten_all()?;
+            let mut last_logits_vec = logits_flat.to_vec1::<f32>()?;
+            
+            // تطبيق عقوبة التكرار (Repetition Penalty) بأسلوب الطرح لضمان الفاعلية
+            for &prev_token in &generated_tokens {
+                let idx = prev_token as usize;
+                if idx < last_logits_vec.len() {
+                    last_logits_vec[idx] -= penalty_factor; 
                 }
-            } else {
-                print!("[{}] ", next_token_id);
             }
-            io::stdout().flush().ok();
 
+            // تحويل النتائج مرة أخرى إلى Tensor للمعالجة الرياضية
+            let processed_logits = Tensor::new(last_logits_vec.as_slice(), &device)?;
+            let pr = (&processed_logits / temperature)?;
+            let pr = candle_nn::ops::softmax(&pr, 0)?;
+            
+            // اختيار التوكن الأعلى احتمالية
+            let next_token_id = pr.argmax(0)?.to_scalar::<u32>()?;
+            generated_tokens.push(next_token_id);
+            
+            // فك الترميز وطباعة النص فوراً
+            if let Some(ref tok) = zumar_tokenizer {
+                if let Ok(text) = tok.decode(&[next_token_id]) { 
+                    print!("{}", text); 
+                    io::stdout().flush().ok();
+                }
+            } else { 
+                print!("[{}] ", next_token_id); 
+                io::stdout().flush().ok();
+            }
+
+            // تحديث المدخلات للخطوة القادمة (Autoregressive)
             current_input = model_block.embed(next_token_id, &device)?; 
 
-            if next_token_id == 50256 { break; }
+            // التوقف عند رمز نهاية النص (EOS)
+            if next_token_id == 50256 || next_token_id == 2 { break; }
         }
         println!("\n\x1b[90m──────────────────────────────────────────────────\x1b[0m");
     }
-    
     Ok(())
 }

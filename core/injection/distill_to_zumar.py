@@ -1,36 +1,131 @@
 import numpy as np
-from safetensors.numpy import save_file
+import json
+import struct
 import os
+from safetensors.numpy import save_file
 
-# المسار الصحيح للوصول من core/injection إلى جذر المشروع
+# --- الإعدادات السيادية ---
+NUM_LAYERS = 30 
+INPUT_DIM = 1024
+NUM_EXPERTS = 8
+VOCAB_SIZE = 50257
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+TEACHER_DIR = os.path.join(BASE_DIR, "models", "teacher")
+SOURCE_FILE = os.path.join(TEACHER_DIR, "model.safetensors") 
 TARGET_DIR = os.path.join(BASE_DIR, "models", "zumar-v1")
+OUTPUT_FILE = os.path.join(TARGET_DIR, "model.safetensors")
 
-def quantize_1_58_bit(w):
-    scale = np.mean(np.abs(w)) + 1e-7
-    return np.clip(np.round(w / scale), -1, 1).astype(np.int8)
+def load_safetensors_manually(file_path):
+    with open(file_path, "rb") as f:
+        header_size_bytes = f.read(8)
+        if not header_size_bytes: return None, None
+        header_size = struct.unpack("<Q", header_size_bytes)[0]
+        header_json = f.read(header_size).decode("utf-8")
+        header = json.loads(header_json)
+        return f.read(), header
 
-def run_injection():
-    if not os.path.exists(TARGET_DIR):
-        os.makedirs(TARGET_DIR)
-        print(f"📁 Created directory: {TARGET_DIR}")
+def get_tensor_raw(buffer, header, tensor_name):
+    if tensor_name not in header: return None
+    info = header[tensor_name]
+    start, end = info["data_offsets"]
+    raw_bytes = buffer[start:end]
+    raw_bits = np.frombuffer(raw_bytes, dtype=np.uint16)
+    # bfloat16 -> float32
+    return (raw_bits.astype(np.uint32) << 16).view(np.float32).reshape(info["shape"])
 
-    zumar_weights = {}
-    hidden_size = 1024
+def smart_resize(source_tensor, target_shape):
+    if source_tensor is None:
+        return (np.random.normal(0, 0.01, target_shape)).astype(np.float32)
+    
+    target = np.zeros(target_shape, dtype=np.float32)
+    s_shape = source_tensor.shape
+    
+    if len(target_shape) == 2:
+        copy_0, copy_1 = min(s_shape[0], target_shape[0]), min(s_shape[1], target_shape[1])
+        target[:copy_0, :copy_1] = source_tensor[:copy_0, :copy_1]
+    else:
+        copy_0 = min(s_shape[0], target_shape[0])
+        target[:copy_0] = source_tensor[:copy_0]
+    return target
 
-    # الحقن لـ 100 طبقة (تطابقاً مع main.rs)
-    for i in range(100):
-        # محاكاة وزن "معالج" (Logic)
-        w = np.random.randn(hidden_size, hidden_size).astype(np.float32) * 0.02
-        zumar_weights[f"layers.{i}.weight"] = quantize_1_58_bit(w)
+def run_distillation():
+    if not os.path.exists(SOURCE_FILE):
+        print(f"❌ Teacher model missing at {SOURCE_FILE}")
+        return
 
-    # أوزان الـ Embedding والـ Head (يجب أن تظل Float32)
-    zumar_weights["embed.weight"] = (np.random.randn(50257, hidden_size) * 0.02).astype(np.float32)
-    zumar_weights["project_head.weight"] = (np.random.randn(50257, hidden_size) * 0.02).astype(np.float32)
+    buffer, header = load_safetensors_manually(SOURCE_FILE)
+    weights = {}
 
-    output_file = os.path.join(TARGET_DIR, "model.safetensors")
-    save_file(zumar_weights, output_file)
-    print(f"✅ Sovereign Intelligence Injected into: {output_file}")
+    print("🧠 Extracting Core Knowledge (Embeddings)...")
+    emb = get_tensor_raw(buffer, header, "model.embed_tokens.weight")
+    weights["model.embed_tokens.weight"] = smart_resize(emb, (VOCAB_SIZE, INPUT_DIM)).astype(np.float16)
+    weights["lm_head.weight"] = smart_resize(emb, (VOCAB_SIZE, INPUT_DIM)).astype(np.float16)
+    weights["lm_head.bias"] = np.zeros((VOCAB_SIZE,)).astype(np.float16)
+    
+    norm_w = get_tensor_raw(buffer, header, "model.norm.weight")
+    weights["model.norm.weight"] = smart_resize(norm_w, (INPUT_DIM,)).astype(np.float16)
+    weights["model.norm.bias"] = np.zeros((INPUT_DIM,)).astype(np.float16)
+
+    for i in range(NUM_LAYERS):
+        src_idx = i % 22
+        src_p = f"model.layers.{src_idx}."
+        dest_p = f"model.layers.{i}.self_attn."
+
+        # --- Mamba / Attention Transformation ---
+        q_w = get_tensor_raw(buffer, header, src_p + "self_attn.q_proj.weight")
+        k_w = get_tensor_raw(buffer, header, src_p + "self_attn.k_proj.weight")
+        v_w = get_tensor_raw(buffer, header, src_p + "self_attn.v_proj.weight")
+        o_w = get_tensor_raw(buffer, header, src_p + "self_attn.o_proj.weight")
+
+        # 1. In_Proj (Combining QKV)
+        qkv = np.concatenate([q_w, k_w, v_w], axis=0) if q_w is not None else None
+        weights[dest_p + "in_proj.weight"] = smart_resize(qkv, (4096, INPUT_DIM)).astype(np.float16)
+        weights[dest_p + "in_proj.bias"] = np.zeros((4096,)).astype(np.float16)
+
+        # 2. X_Proj & DT_Proj (Essential for Mamba logic)
+        weights[dest_p + "x_proj.weight"] = smart_resize(k_w, (2080, 2048)).astype(np.float16)
+        weights[dest_p + "x_proj.bias"] = np.zeros((2080,)).astype(np.float16) # الحل لخطأ x_proj.bias
+        
+        weights[dest_p + "dt_proj.weight"] = smart_resize(v_w, (2048, 2048)).astype(np.float16)
+        weights[dest_p + "dt_proj.bias"] = np.zeros((2048,)).astype(np.float16)
+
+        # 3. Conv1d & Out_Proj
+        weights[dest_p + "conv1d.weight"] = (np.random.randn(2048, 1, 4) * 0.01).astype(np.float16)
+        weights[dest_p + "conv1d.bias"] = np.zeros((2048,)).astype(np.float16)
+        
+        weights[dest_p + "out_proj.weight"] = smart_resize(o_w, (INPUT_DIM, 2048)).astype(np.float16)
+        weights[dest_p + "out_proj.bias"] = np.zeros((INPUT_DIM,)).astype(np.float16)
+
+        # 4. Mamba States (Identity initialization)
+        weights[dest_p + "a_log"] = (np.ones((16, 2048)) * -0.1).astype(np.float16)
+        weights[dest_p + "d"] = np.ones((2048,)).astype(np.float16)
+
+        # --- MoE Experts Transformation ---
+        up_w = get_tensor_raw(buffer, header, src_p + "mlp.up_proj.weight")
+        gate_w = get_tensor_raw(buffer, header, src_p + "mlp.gate_proj.weight")
+        
+        weights[f"model.layers.{i}.mlp.gate.weight"] = smart_resize(gate_w, (NUM_EXPERTS, INPUT_DIM)).astype(np.float16)
+        
+        for e in range(NUM_EXPERTS):
+            # كل خبير يحصل على ذكاء المعلم مع تنوع طفيف
+            expert_noise = up_w + (np.random.randn(*up_w.shape) * 0.001) if up_w is not None else None
+            weights[f"model.layers.{i}.mlp.expert_{e}.weight"] = smart_resize(expert_noise, (INPUT_DIM, INPUT_DIM)).astype(np.float16)
+
+        # --- Norms with Bias ---
+        in_norm = get_tensor_raw(buffer, header, src_p + "input_layernorm.weight")
+        weights[f"model.layers.{i}.input_layernorm.weight"] = smart_resize(in_norm, (INPUT_DIM,)).astype(np.float16)
+        weights[f"model.layers.{i}.input_layernorm.bias"] = np.zeros((INPUT_DIM,)).astype(np.float16)
+        
+        p_norm = get_tensor_raw(buffer, header, src_p + "post_attention_layernorm.weight")
+        weights[f"model.layers.{i}.post_attention_layernorm.weight"] = smart_resize(p_norm, (INPUT_DIM,)).astype(np.float16)
+        weights[f"model.layers.{i}.post_attention_layernorm.bias"] = np.zeros((INPUT_DIM,)).astype(np.float16)
+
+        if i % 4 == 0: print(f"✅ Unified Layer {i} with Biases")
+
+    print(f"💾 Saving to {OUTPUT_FILE}...")
+    save_file(weights, OUTPUT_FILE)
+    print("🚀 Distillation Finished. Run 'cargo run' now.")
 
 if __name__ == "__main__":
-    run_injection()
+    run_distillation()
