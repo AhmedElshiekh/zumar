@@ -678,6 +678,7 @@ dependencies = [
  "half",
  "iroh",
  "mamba-rs",
+ "memmap2",
  "openblas-src",
  "safetensors 0.5.3",
  "serde",

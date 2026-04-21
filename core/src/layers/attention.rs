@@ -4,12 +4,12 @@ use candle_nn::{Module, VarMap};
 pub struct ZumarFlashAttention {
     n_heads: usize,
     head_dim: usize,
-    softmax_scale: f32,
+    softmax_scale: f16,
 }
 
 impl ZumarFlashAttention {
     pub fn new(n_heads: usize, head_dim: usize) -> Self {
-        let softmax_scale = 1.0 / (head_dim as f32).sqrt();
+        let softmax_scale = 1.0 / (head_dim as f16).sqrt();
         Self {
             n_heads,
             head_dim,

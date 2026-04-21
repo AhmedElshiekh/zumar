@@ -6,7 +6,7 @@ mod loader;
 mod kv_cache;
 mod kernels;
 
-use candle_core::{Result, IndexOp, Device}; // حذفنا التوكنز غير المستخدمة لتجنب الـ Warnings
+use candle_core::{Result, IndexOp}; // حذفنا التوكنز غير المستخدمة لتجنب الـ Warnings
 use std::io::{self, Write}; 
 use crate::kv_cache::KVCache;
 

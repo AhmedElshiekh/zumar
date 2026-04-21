@@ -32,7 +32,7 @@ impl ZumarMambaBlock {
 
         let a_log = vs.get((cfg.d_state, d_inner), "a_log")?;
         let d = vs.get(d_inner, "d")?;
-        let conv1d = Tensor::zeros((d_inner, cfg.d_conv), DType::F32, device)?;
+        let conv1d = Tensor::zeros((d_inner, cfg.d_conv), DType::F16, device)?;
 
         Ok(Self { 
             in_proj, 
