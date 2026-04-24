@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use candle_core::{Tensor, Result, Device};
 
 // تضمين ملفات الـ PTX (كود الآلة للـ GPU) فقط عند تفعيل ميزة cuda

@@ -1,10 +1,9 @@
-//use candle_core::{Result, Tensor, Device, Shape};
 use candle_core::{Result, Tensor};
 use candle_nn::{Module, VarBuilder};
-use crate::kernels; // استدعاء الموديول الخاص بالكيرنالات
+use crate::kernels;
 
 pub struct ZumarBitLinear {
-    weight: Tensor, // مخزنة كـ {-1, 0, 1} ولكن بنوع f32 حالياً
+    weight: Tensor,
     bias: Option<Tensor>,
     scale: Tensor,
 }
@@ -13,50 +12,50 @@ impl ZumarBitLinear {
     pub fn new(in_dim: usize, out_dim: usize, vs: VarBuilder) -> Result<Self> {
         let raw_weight = vs.get((out_dim, in_dim), "weight")?;
         let device = vs.device();
-
-        // حساب الـ Scale بناءً على متوسط القيم
         let mean_abs = raw_weight.abs()?.mean_all()?.to_scalar::<f32>()?;
         let scale_val = mean_abs.max(1e-5);
         let scale_tensor = Tensor::new(scale_val, device)?;
-
-        // تكميم الأوزان إلى {-1, 0, 1}
-        let quantized_weight = (raw_weight.broadcast_div(&scale_tensor)?
-            .round()?
-            .clamp(-1.0, 1.0))?;
-
-        Ok(Self {
-            weight: quantized_weight,
-            bias: None,
-            scale: scale_tensor,
-        })
+        let quantized_weight = (raw_weight.broadcast_div(&scale_tensor)?.round()?.clamp(-1.0, 1.0))?;
+        Ok(Self { weight: quantized_weight, bias: None, scale: scale_tensor })
     }
 }
 
 impl Module for ZumarBitLinear {
     fn forward(&self, x: &Tensor) -> Result<Tensor> {
-        let (b, s, h) = x.dims3()?;
-        let x_flat = x.reshape((b * s, h))?;
-
-        // --- [ نقطة التحول للسرعة: استدعاء الكيرنال ] ---
+        // حفظ الشكل الأصلي
+        let original_shape = x.shape().clone();
         
-        let res = if x.device().is_cuda() {
-            // إذا كان الجهاز CUDA، نستخدم الكيرنال المخصص الذي يعالج العمليات كـ Integers
-            // هذا سيعوض x_flat.matmul(&self.weight.t()?)
-            kernels::bitnet_matmul(&x_flat, &self.weight)?
+        // تحويل إلى ثنائي الأبعاد للمضاعفة
+        let x_2d = if original_shape.rank() == 3 {
+            let (b, s, h) = x.dims3()?;
+            x.reshape((b * s, h))?
         } else {
-            // إذا كان على الـ CPU، نستخدم Matmul المحسن للـ Native CPU
-            x_flat.matmul(&self.weight.t()?)?
+            x.clone()
         };
 
-        // إعادة التشكيل وتطبيق الـ Scale
-        let out_dim = self.weight.dim(0)?;
-        let res = res.reshape((b, s, out_dim))?;
-        
+        // الضرب
+        let res = if x_2d.device().is_cuda() {
+            kernels::bitnet_matmul(&x_2d, &self.weight)?
+        } else {
+            x_2d.matmul(&self.weight.t()?)?
+        };
+
+        // scale
         let res = res.broadcast_mul(&self.scale)?;
 
-        match &self.bias {
+        // bias
+        let res = match &self.bias {
             Some(b) => res.broadcast_add(b),
             None => Ok(res),
+        }?;
+
+        // إعادة التشكيل
+        if original_shape.rank() == 3 {
+            let (b, s, _) = original_shape.dims3()?;
+            let out_dim = self.weight.dim(0)?;
+            res.reshape((b, s, out_dim))
+        } else {
+            Ok(res)
         }
     }
 }

@@ -14,9 +14,11 @@ zumar/
 │   │   │   ├── packing.rs
 │   │   │   ├── moe.rs
 │   │   │   └── mamba.rs       <-- معمارية Mamba
+│   │   │ 
 │   │   ├── kernels/           <-- مجلد كود CUDA 
 │   │   │   ├── bitnet_kernel.cu
-│   │   │   └── mods.rs
+│   │   │   └── mod.rs
+│   │   │ 
 │   │   ├── contig.rs
 │   │   ├── kv_cache.rs
 │   │   ├── loader.rs
