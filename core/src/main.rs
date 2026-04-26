@@ -73,7 +73,6 @@ async fn main() -> Result<()> {
                 return Ok(());
             }
             
-            // جمع كل ملفات safetensors
             let mut teacher_files: Vec<std::path::PathBuf> = Vec::new();
             if let Ok(entries) = std::fs::read_dir(teacher_dir) {
                 for entry in entries.flatten() {
@@ -84,7 +83,6 @@ async fn main() -> Result<()> {
                 }
             }
             
-            // ترتيب: الأكبر أولاً
             teacher_files.sort_by(|a, b| {
                 let sa = std::fs::metadata(a).map(|m| m.len()).unwrap_or(0);
                 let sb = std::fs::metadata(b).map(|m| m.len()).unwrap_or(0);
@@ -105,7 +103,8 @@ async fn main() -> Result<()> {
                 println!("   📄 {} ({:.1} MB)", f.file_name().unwrap().to_string_lossy(), size);
             }
             
-            let epochs: usize = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(50);
+            let total_epochs: usize = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(50);
+            let save_interval = 100;
             
             // قطّر كل نموذج حتى ينجح واحد
             for (i, teacher_path) in teacher_files.iter().enumerate() {
@@ -128,42 +127,61 @@ async fn main() -> Result<()> {
                     num_experts, top_k, n_heads, vs.clone(),
                 )?;
                 
-                let config = true_distill::DistillConfig {
-                    epochs,
-                    learning_rate: 0.001,
-                    temperature: 3.0,
-                };
-                
-                let distiller = true_distill::TrueDistiller::new(config, device.clone());
                 let training_data = data::TrainingData::load(None);
                 let all_texts = training_data.repeat(10);
                 
-                match distiller.distill(
-                    &mut model,
-                    &varmap,
-                    teacher_path.to_str().unwrap(),
-                    &all_texts,
-                ) {
-                    Ok(_) => {
-                        let save_dir = std::path::Path::new("models/zumar-v1");
-                        std::fs::create_dir_all(save_dir)?;
-                        let save_path = save_dir.join("model.safetensors");
-                        varmap.save(&save_path)?;
-                        
-                        let size_mb = std::fs::metadata(&save_path)
-                            .map(|m| m.len() as f64 / 1_048_576.0)
-                            .unwrap_or(0.0);
-                        println!("\n\x1b[1;32m💾 Saved ({:.1} MB)\x1b[0m", size_mb);
-                        println!("\x1b[1;32m✅ Model {} distillation complete!\x1b[0m", i + 1);
-                        println!("\x1b[1;36m🚀 Run: cargo run -p core --release\x1b[0m");
-                        break;  // نجحنا - توقف
-                    }
-                    Err(e) => {
-                        println!("\x1b[1;31m❌ Failed: {}\x1b[0m", e);
-                        if i < teacher_files.len() - 1 {
-                            println!("\x1b[1;33m   ⏭  Trying next model...\x1b[0m");
+                let mut all_ok = true;
+                
+                for chunk_start in (0..total_epochs).step_by(save_interval) {
+                    let chunk_epochs = std::cmp::min(save_interval, total_epochs - chunk_start);
+                    
+                    println!("\n🔄 Section {}/{}, epochs {}-{}",
+                        chunk_start / save_interval + 1,
+                        (total_epochs + save_interval - 1) / save_interval,
+                        chunk_start + 1,
+                        chunk_start + chunk_epochs,
+                    );
+                    
+                    let config = true_distill::DistillConfig {
+                        epochs: chunk_epochs,
+                        learning_rate: 0.001,
+                        temperature: 3.0,
+                    };
+                    
+                    let distiller = true_distill::TrueDistiller::new(config, device.clone());
+                    
+                    match distiller.distill(
+                        &mut model,
+                        &varmap,
+                        teacher_path.to_str().unwrap(),
+                        &all_texts,
+                    ) {
+                        Ok(_) => {
+                            let save_dir = std::path::Path::new("models/zumar-v1");
+                            std::fs::create_dir_all(save_dir).ok();
+                            let save_path = save_dir.join("model.safetensors");
+                            if let Err(e) = varmap.save(&save_path) {
+                                println!("\x1b[1;31m⚠️  Save failed: {}\x1b[0m", e);
+                            } else {
+                                let size_mb = std::fs::metadata(&save_path)
+                                    .map(|m| m.len() as f64 / 1_048_576.0)
+                                    .unwrap_or(0.0);
+                                println!("\x1b[1;32m💾 Saved at epoch {} ({:.1} MB)\x1b[0m", 
+                                    chunk_start + chunk_epochs, size_mb);
+                            }
+                        }
+                        Err(e) => {
+                            println!("\x1b[1;31m❌ Failed at epoch {}: {}\x1b[0m", chunk_start, e);
+                            all_ok = false;
+                            break;
                         }
                     }
+                }
+                
+                if all_ok {
+                    println!("\n\x1b[1;32m✅ All {} epochs complete!\x1b[0m", total_epochs);
+                    println!("\x1b[1;36m🚀 Run: cargo run -p core --release\x1b[0m");
+                    break;
                 }
             }
         }
@@ -272,7 +290,6 @@ async fn main() -> Result<()> {
                         Ok(vec) => vec, Err(_) => break
                     };
                     
-                    // عقوبة التكرار
                     let mut logits = v.clone();
                     for &prev in &generated {
                         let idx = prev as usize;
@@ -281,18 +298,15 @@ async fn main() -> Result<()> {
                         }
                     }
                     
-                    // Temperature
                     let scaled: Vec<f32> = logits.iter()
                         .map(|&x| x / temperature as f32)
                         .collect();
                     
-                    // Softmax
                     let max_val = scaled.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
                     let exp: Vec<f32> = scaled.iter().map(|&v| (v - max_val).exp()).collect();
                     let sum: f32 = exp.iter().sum();
                     let probs: Vec<f32> = exp.iter().map(|&v| v / (sum + 1e-9)).collect();
                     
-                    // اختيار أعلى احتمال
                     let mut best_val = f32::NEG_INFINITY;
                     let mut best_idx = 0u32;
                     for (i, &val) in probs.iter().enumerate().take(512) {

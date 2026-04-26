@@ -1,0 +1,4229 @@
+warning: unused import: `Tensor`
+  --> core/src/main.rs:14:27
+   |
+14 | use candle_core::{Result, Tensor};
+   |                           ^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `Module`
+ --> core/src/true_distill.rs:1:43
+  |
+1 | use candle_core::{Tensor, Result, Device, Module};
+  |                                           ^^^^^^
+
+warning: variable does not need to be mutable
+   --> core/src/main.rs:312:17
+    |
+312 |             let mut model = ZumarModel::new(
+    |                 ----^^^^^
+    |                 |
+    |                 help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: fields `hidden_size` and `vocab_size` are never read
+  --> core/src/layers/mod.rs:29:9
+   |
+24 | pub struct ZumarModel {
+   |            ---------- fields in this struct
+...
+29 |     pub hidden_size: usize,
+   |         ^^^^^^^^^^^
+30 |     pub vocab_size: usize,
+   |         ^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: method `embed_tokens` is never used
+  --> core/src/layers/mod.rs:90:12
+   |
+68 | impl ZumarModel {
+   | --------------- method in this implementation
+...
+90 |     pub fn embed_tokens(&self, token_ids: &[u32], devi...
+   |            ^^^^^^^^^^^^
+
+warning: struct `ZumarBitLinear` is never constructed
+ --> core/src/layers/bitlinear.rs:5:12
+  |
+5 | pub struct ZumarBitLinear {
+  |            ^^^^^^^^^^^^^^
+
+warning: associated items `new`, `quantize_weights`, and `quantized_matmul` are never used
+  --> core/src/layers/bitlinear.rs:18:12
+   |
+17 | impl ZumarBitLinear {
+   | ------------------- associated items in this implementation
+18 |     pub fn new(in_dim: usize, out_dim: usize, vs: VarB...
+   |            ^^^
+...
+39 |     pub fn quantize_weights(&mut self) -> Result<()> {
+   |            ^^^^^^^^^^^^^^^^
+...
+60 |     fn quantized_matmul(&self, x: &Tensor) -> Result<T...
+   |        ^^^^^^^^^^^^^^^^
+
+warning: field `top_k` is never read
+ --> core/src/layers/moe.rs:8:9
+  |
+4 | pub struct ZumarMoE {
+  |            -------- field in this struct
+...
+8 |     pub top_k: usize,
+  |         ^^^^^
+
+warning: struct `ZumarMambaConfig` is never constructed
+ --> core/src/layers/mamba.rs:4:12
+  |
+4 | pub struct ZumarMambaConfig {
+  |            ^^^^^^^^^^^^^^^^
+
+warning: struct `ZumarMambaBlock` is never constructed
+  --> core/src/layers/mamba.rs:11:12
+   |
+11 | pub struct ZumarMambaBlock {
+   |            ^^^^^^^^^^^^^^^
+
+warning: associated items `new`, `selective_scan`, `silu`, and `simple_conv1d` are never used
+   --> core/src/layers/mamba.rs:26:12
+    |
+ 25 | impl ZumarMambaBlock {
+    | -------------------- associated items in this implementation
+ 26 |     pub fn new(cfg: &ZumarMambaConfig, vs: VarBuilder...
+    |            ^^^
+...
+ 53 |     fn selective_scan(
+    |        ^^^^^^^^^^^^^^
+...
+ 97 |     fn silu(x: &Tensor) -> Result<Tensor> {
+    |        ^^^^
+...
+101 |     fn simple_conv1d(&self, x: &Tensor) -> Result<Ten...
+    |        ^^^^^^^^^^^^^
+
+warning: struct `ZumarSpikingLayer` is never constructed
+ --> core/src/layers/snn.rs:3:12
+  |
+3 | pub struct ZumarSpikingLayer {
+  |            ^^^^^^^^^^^^^^^^^
+
+warning: associated items `new`, `reset`, `surrogate_gradient`, and `forward` are never used
+  --> core/src/layers/snn.rs:11:12
+   |
+10 | impl ZumarSpikingLayer {
+   | ---------------------- associated items in this implementation
+11 |     pub fn new(threshold: f32, tau: f32, time_steps: u...
+   |            ^^^
+...
+20 |     pub fn reset(&mut self) {
+   |            ^^^^^
+...
+24 |     fn surrogate_gradient(v: &Tensor, threshold: f32) ...
+   |        ^^^^^^^^^^^^^^^^^^
+...
+33 |     pub fn forward(&mut self, x: &Tensor) -> Result<Te...
+   |            ^^^^^^^
+
+warning: associated items `new` and `decode` are never used
+  --> core/src/tokenizer.rs:9:12
+   |
+ 8 | impl ZumarTokenizer {
+   | ------------------- associated items in this implementation
+ 9 |     pub fn new(path: &str) -> Result<Self> {
+   |            ^^^
+...
+27 |     pub fn decode(&self, ids: &[u32]) -> Result<String> {
+   |            ^^^^^^
+
+warning: method `get_tokenizer_path` is never used
+  --> core/src/loader.rs:25:12
+   |
+11 | impl ZumarLoader {
+   | ---------------- method in this implementation
+...
+25 |     pub fn get_tokenizer_path(&self) -> String {
+   |            ^^^^^^^^^^^^^^^^^^
+
+warning: field `temperature` is never read
+ --> core/src/true_distill.rs:9:9
+  |
+6 | pub struct DistillConfig {
+  |            ------------- field in this struct
+...
+9 |     pub temperature: f64,
+  |         ^^^^^^^^^^^
+
+warning: field `device` is never read
+   --> core/src/true_distill.rs:103:5
+    |
+100 | pub struct AutoTeacher {
+    |            ----------- field in this struct
+...
+103 |     device: Device,
+    |     ^^^^^^
+
+warning: `core` (bin "core") generated 17 warnings (run `cargo fix --bin "core" -p core` to apply 2 suggestions)
+    Finished `release` profile [optimized] target(s) in 9.93s
+     Running `/tmp/cargo_target/release/core distill 10000`
+[2J[1;35m
+
+    ███████╗██╗   ██╗███╗   ███╗ █████╗ ██████╗ 
+    ╚══███╔╝██║   ██║████╗ ████║██╔══██╗██╔══██╗
+      ███╔╝ ██║   ██║██╔████╔██║███████║██████╔╝
+     ███╔╝  ██║   ██║██║╚██╔╝██║██╔══██║██╔══██╗
+    ███████╗╚██████╔╝██║ ╚═╝ ██║██║  ██║██║  ██║
+    ╚══════╝ ╚═════╝ ╚═╝     ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝
+    
+[0m
+[1;36m--- 🌌 ZUMAR SOVEREIGN CORE v6.0 ---[0m
+[90m--------------------------------------------------[0m
+🍃 Routing to CPU for efficiency...
+
+Usage:
+  train <epochs>       - Self-training on built-in data
+  distill <epochs>     - True distillation from ALL safetensors in teacher/
+  chat                 - Chat mode (default)
+
+Examples:
+  cargo run -p core --release -- distill 50
+  cargo run -p core --release -- train 10
+  cargo run -p core --release
+
+🧠 TRUE KNOWLEDGE DISTILLATION (ALL MODELS)
+
+[1;32m📂 Found 2 teacher model(s):[0m
+   📄 model.safetensors (336.5 MB)
+   📄 old-model.safetensors (256.6 MB)
+
+============================================================
+🧬 Model 1/2: model.safetensors
+============================================================
+📚 Using built-in training data
+
+🔄 Section 1/100, epochs 1-100
+
+🧠 TRUE KNOWLEDGE DISTILLATION
+   Epochs: 100
+   Samples: 300
+   📊 Architecture: gpt2
+   📊 Layers: 6, Hidden: 768, Vocab: 50257
+   ✅ 82 tensors loaded
+
+  ✅ Ep 1: Loss 0.0000 | 0.0s
+
+  ✅ Ep 2: Loss 0.0000 | 0.0s
+
+  ✅ Ep 3: Loss 0.0000 | 0.0s
+
+  ✅ Ep 4: Loss 0.0000 | 0.0s
+
+  ✅ Ep 5: Loss 0.0000 | 0.0s
+
+  ✅ Ep 6: Loss 0.0000 | 0.0s
+
+  ✅ Ep 7: Loss 0.0000 | 0.0s
+
+  ✅ Ep 8: Loss 0.0000 | 0.0s
+
+  ✅ Ep 9: Loss 0.0000 | 0.0s
+
+  ✅ Ep 10: Loss 0.0000 | 0.0s
+
+  ✅ Ep 11: Loss 0.0000 | 0.0s
+
+  ✅ Ep 12: Loss 0.0000 | 0.0s
+
+  ✅ Ep 13: Loss 0.0000 | 0.0s
+
+  ✅ Ep 14: Loss 0.0000 | 0.0s
+
+  ✅ Ep 15: Loss 0.0000 | 0.0s
+
+  ✅ Ep 16: Loss 0.0000 | 0.0s
+
+  ✅ Ep 17: Loss 0.0000 | 0.0s
+
+  ✅ Ep 18: Loss 0.0000 | 0.0s
+
+  ✅ Ep 19: Loss 0.0000 | 0.0s
+
+  ✅ Ep 20: Loss 0.0000 | 0.0s
+
+  ✅ Ep 21: Loss 0.0000 | 0.0s
+
+  ✅ Ep 22: Loss 0.0000 | 0.0s
+
+  ✅ Ep 23: Loss 0.0000 | 0.0s
+
+  ✅ Ep 24: Loss 0.0000 | 0.0s
+
+  ✅ Ep 25: Loss 0.0000 | 0.0s
+
+  ✅ Ep 26: Loss 0.0000 | 0.0s
+
+  ✅ Ep 27: Loss 0.0000 | 0.0s
+
+  ✅ Ep 28: Loss 0.0000 | 0.0s
+
+  ✅ Ep 29: Loss 0.0000 | 0.0s
+
+  ✅ Ep 30: Loss 0.0000 | 0.0s
+
+  ✅ Ep 31: Loss 0.0000 | 0.0s
+
+  ✅ Ep 32: Loss 0.0000 | 0.0s
+
+  ✅ Ep 33: Loss 0.0000 | 0.0s
+
+  ✅ Ep 34: Loss 0.0000 | 0.0s
+
+  ✅ Ep 35: Loss 0.0000 | 0.0s
+
+  ✅ Ep 36: Loss 0.0000 | 0.0s
+
+  ✅ Ep 37: Loss 0.0000 | 0.0s
+
+  ✅ Ep 38: Loss 0.0000 | 0.0s
+
+  ✅ Ep 39: Loss 0.0000 | 0.0s
+
+  ✅ Ep 40: Loss 0.0000 | 0.0s
+
+  ✅ Ep 41: Loss 0.0000 | 0.0s
+
+  ✅ Ep 42: Loss 0.0000 | 0.0s
+
+  ✅ Ep 43: Loss 0.0000 | 0.0s
+
+  ✅ Ep 44: Loss 0.0000 | 0.0s
+
+  ✅ Ep 45: Loss 0.0000 | 0.0s
+
+  ✅ Ep 46: Loss 0.0000 | 0.0s
+
+  ✅ Ep 47: Loss 0.0000 | 0.0s
+
+  ✅ Ep 48: Loss 0.0000 | 0.0s
+
+  ✅ Ep 49: Loss 0.0000 | 0.0s
+
+  ✅ Ep 50: Loss 0.0000 | 0.0s
+
+  ✅ Ep 51: Loss 0.0000 | 0.0s
+
+  ✅ Ep 52: Loss 0.0000 | 0.0s
+
+  ✅ Ep 53: Loss 0.0000 | 0.0s
+
+  ✅ Ep 54: Loss 0.0000 | 0.0s
+
+  ✅ Ep 55: Loss 0.0000 | 0.0s
+
+  ✅ Ep 56: Loss 0.0000 | 0.0s
+
+  ✅ Ep 57: Loss 0.0000 | 0.0s
+
+  ✅ Ep 58: Loss 0.0000 | 0.0s
+
+  ✅ Ep 59: Loss 0.0000 | 0.0s
+
+  ✅ Ep 60: Loss 0.0000 | 0.0s
+
+  ✅ Ep 61: Loss 0.0000 | 0.0s
+
+  ✅ Ep 62: Loss 0.0000 | 0.0s
+
+  ✅ Ep 63: Loss 0.0000 | 0.0s
+
+  ✅ Ep 64: Loss 0.0000 | 0.0s
+
+  ✅ Ep 65: Loss 0.0000 | 0.0s
+
+  ✅ Ep 66: Loss 0.0000 | 0.0s
+
+  ✅ Ep 67: Loss 0.0000 | 0.0s
+
+  ✅ Ep 68: Loss 0.0000 | 0.0s
+
+  ✅ Ep 69: Loss 0.0000 | 0.0s
+
+  ✅ Ep 70: Loss 0.0000 | 0.0s
+
+  ✅ Ep 71: Loss 0.0000 | 0.0s
+
+  ✅ Ep 72: Loss 0.0000 | 0.0s
+
+  ✅ Ep 73: Loss 0.0000 | 0.0s
+
+  ✅ Ep 74: Loss 0.0000 | 0.0s
+
+  ✅ Ep 75: Loss 0.0000 | 0.0s
+
+  ✅ Ep 76: Loss 0.0000 | 0.0s
+
+  ✅ Ep 77: Loss 0.0000 | 0.0s
+
+  ✅ Ep 78: Loss 0.0000 | 0.0s
+
+  ✅ Ep 79: Loss 0.0000 | 0.0s
+
+  ✅ Ep 80: Loss 0.0000 | 0.0s
+
+  ✅ Ep 81: Loss 0.0000 | 0.0s
+
+  ✅ Ep 82: Loss 0.0000 | 0.0s
+
+  ✅ Ep 83: Loss 0.0000 | 0.0s
+
+  ✅ Ep 84: Loss 0.0000 | 0.0s
+
+  ✅ Ep 85: Loss 0.0000 | 0.0s
+
+  ✅ Ep 86: Loss 0.0000 | 0.0s
+
+  ✅ Ep 87: Loss 0.0000 | 0.0s
+
+  ✅ Ep 88: Loss 0.0000 | 0.0s
+
+  ✅ Ep 89: Loss 0.0000 | 0.0s
+
+  ✅ Ep 90: Loss 0.0000 | 0.0s
+
+  ✅ Ep 91: Loss 0.0000 | 0.0s
+
+  ✅ Ep 92: Loss 0.0000 | 0.0s
+
+  ✅ Ep 93: Loss 0.0000 | 0.0s
+
+  ✅ Ep 94: Loss 0.0000 | 0.0s
+
+  ✅ Ep 95: Loss 0.0000 | 0.0s
+
+  ✅ Ep 96: Loss 0.0000 | 0.0s
+
+  ✅ Ep 97: Loss 0.0000 | 0.0s
+
+  ✅ Ep 98: Loss 0.0000 | 0.0s
+
+  ✅ Ep 99: Loss 0.0000 | 0.0s
+
+  ✅ Ep 100: Loss 0.0000 | 0.0s
+
+⏱ Total: 0.0s
+[1;32m💾 Saved at epoch 100 (970.0 MB)[0m
+
+🔄 Section 2/100, epochs 101-200
+
+🧠 TRUE KNOWLEDGE DISTILLATION
+   Epochs: 100
+   Samples: 300
+   📊 Architecture: gpt2
+   📊 Layers: 6, Hidden: 768, Vocab: 50257
+   ✅ 82 tensors loaded
+
+  ✅ Ep 1: Loss 0.0000 | 0.0s
+
+  ✅ Ep 2: Loss 0.0000 | 0.0s
+
+  ✅ Ep 3: Loss 0.0000 | 0.0s
+
+  ✅ Ep 4: Loss 0.0000 | 0.0s
+
+  ✅ Ep 5: Loss 0.0000 | 0.0s
+
+  ✅ Ep 6: Loss 0.0000 | 0.0s
+
+  ✅ Ep 7: Loss 0.0000 | 0.0s
+
+  ✅ Ep 8: Loss 0.0000 | 0.0s
+
+  ✅ Ep 9: Loss 0.0000 | 0.0s
+
+  ✅ Ep 10: Loss 0.0000 | 0.0s
+
+  ✅ Ep 11: Loss 0.0000 | 0.0s
+
+  ✅ Ep 12: Loss 0.0000 | 0.0s
+
+  ✅ Ep 13: Loss 0.0000 | 0.0s
+
+  ✅ Ep 14: Loss 0.0000 | 0.0s
+
+  ✅ Ep 15: Loss 0.0000 | 0.0s
+
+  ✅ Ep 16: Loss 0.0000 | 0.0s
+
+  ✅ Ep 17: Loss 0.0000 | 0.0s
+
+  ✅ Ep 18: Loss 0.0000 | 0.0s
+
+  ✅ Ep 19: Loss 0.0000 | 0.0s
+
+  ✅ Ep 20: Loss 0.0000 | 0.0s
+
+  ✅ Ep 21: Loss 0.0000 | 0.0s
+
+  ✅ Ep 22: Loss 0.0000 | 0.0s
+
+  ✅ Ep 23: Loss 0.0000 | 0.0s
+
+  ✅ Ep 24: Loss 0.0000 | 0.0s
+
+  ✅ Ep 25: Loss 0.0000 | 0.0s
+
+  ✅ Ep 26: Loss 0.0000 | 0.0s
+
+  ✅ Ep 27: Loss 0.0000 | 0.0s
+
+  ✅ Ep 28: Loss 0.0000 | 0.0s
+
+  ✅ Ep 29: Loss 0.0000 | 0.0s
+
+  ✅ Ep 30: Loss 0.0000 | 0.0s
+
+  ✅ Ep 31: Loss 0.0000 | 0.0s
+
+  ✅ Ep 32: Loss 0.0000 | 0.0s
+
+  ✅ Ep 33: Loss 0.0000 | 0.0s
+
+  ✅ Ep 34: Loss 0.0000 | 0.0s
+
+  ✅ Ep 35: Loss 0.0000 | 0.0s
+
+  ✅ Ep 36: Loss 0.0000 | 0.0s
+
+  ✅ Ep 37: Loss 0.0000 | 0.0s
+
+  ✅ Ep 38: Loss 0.0000 | 0.0s
+
+  ✅ Ep 39: Loss 0.0000 | 0.0s
+
+  ✅ Ep 40: Loss 0.0000 | 0.0s
+
+  ✅ Ep 41: Loss 0.0000 | 0.0s
+
+  ✅ Ep 42: Loss 0.0000 | 0.0s
+
+  ✅ Ep 43: Loss 0.0000 | 0.0s
+
+  ✅ Ep 44: Loss 0.0000 | 0.0s
+
+  ✅ Ep 45: Loss 0.0000 | 0.0s
+
+  ✅ Ep 46: Loss 0.0000 | 0.0s
+
+  ✅ Ep 47: Loss 0.0000 | 0.0s
+
+  ✅ Ep 48: Loss 0.0000 | 0.0s
+
+  ✅ Ep 49: Loss 0.0000 | 0.0s
+
+  ✅ Ep 50: Loss 0.0000 | 0.0s
+
+  ✅ Ep 51: Loss 0.0000 | 0.0s
+
+  ✅ Ep 52: Loss 0.0000 | 0.0s
+
+  ✅ Ep 53: Loss 0.0000 | 0.0s
+
+  ✅ Ep 54: Loss 0.0000 | 0.0s
+
+  ✅ Ep 55: Loss 0.0000 | 0.0s
+
+  ✅ Ep 56: Loss 0.0000 | 0.0s
+
+  ✅ Ep 57: Loss 0.0000 | 0.0s
+
+  ✅ Ep 58: Loss 0.0000 | 0.0s
+
+  ✅ Ep 59: Loss 0.0000 | 0.0s
+
+  ✅ Ep 60: Loss 0.0000 | 0.0s
+
+  ✅ Ep 61: Loss 0.0000 | 0.0s
+
+  ✅ Ep 62: Loss 0.0000 | 0.0s
+
+  ✅ Ep 63: Loss 0.0000 | 0.0s
+
+  ✅ Ep 64: Loss 0.0000 | 0.0s
+
+  ✅ Ep 65: Loss 0.0000 | 0.0s
+
+  ✅ Ep 66: Loss 0.0000 | 0.0s
+
+  ✅ Ep 67: Loss 0.0000 | 0.0s
+
+  ✅ Ep 68: Loss 0.0000 | 0.0s
+
+  ✅ Ep 69: Loss 0.0000 | 0.0s
+
+  ✅ Ep 70: Loss 0.0000 | 0.0s
+
+  ✅ Ep 71: Loss 0.0000 | 0.0s
+
+  ✅ Ep 72: Loss 0.0000 | 0.0s
+
+  ✅ Ep 73: Loss 0.0000 | 0.0s
+
+  ✅ Ep 74: Loss 0.0000 | 0.0s
+
+  ✅ Ep 75: Loss 0.0000 | 0.0s
+
+  ✅ Ep 76: Loss 0.0000 | 0.0s
+
+  ✅ Ep 77: Loss 0.0000 | 0.0s
+
+  ✅ Ep 78: Loss 0.0000 | 0.0s
+
+  ✅ Ep 79: Loss 0.0000 | 0.0s
+
+  ✅ Ep 80: Loss 0.0000 | 0.0s
+
+  ✅ Ep 81: Loss 0.0000 | 0.0s
+
+  ✅ Ep 82: Loss 0.0000 | 0.0s
+
+  ✅ Ep 83: Loss 0.0000 | 0.0s
+
+  ✅ Ep 84: Loss 0.0000 | 0.0s
+
+  ✅ Ep 85: Loss 0.0000 | 0.0s
+
+  ✅ Ep 86: Loss 0.0000 | 0.0s
+
+  ✅ Ep 87: Loss 0.0000 | 0.0s
+
+  ✅ Ep 88: Loss 0.0000 | 0.0s
+
+  ✅ Ep 89: Loss 0.0000 | 0.0s
+
+  ✅ Ep 90: Loss 0.0000 | 0.0s
+
+  ✅ Ep 91: Loss 0.0000 | 0.0s
+
+  ✅ Ep 92: Loss 0.0000 | 0.0s
+
+  ✅ Ep 93: Loss 0.0000 | 0.0s
+
+  ✅ Ep 94: Loss 0.0000 | 0.0s
+
+  ✅ Ep 95: Loss 0.0000 | 0.0s
+
+  ✅ Ep 96: Loss 0.0000 | 0.0s
+
+  ✅ Ep 97: Loss 0.0000 | 0.0s
+
+  ✅ Ep 98: Loss 0.0000 | 0.0s
+
+  ✅ Ep 99: Loss 0.0000 | 0.0s
+
+  ✅ Ep 100: Loss 0.0000 | 0.0s
+
+⏱ Total: 0.0s
+[1;32m💾 Saved at epoch 200 (970.0 MB)[0m
+
+🔄 Section 3/100, epochs 201-300
+
+🧠 TRUE KNOWLEDGE DISTILLATION
+   Epochs: 100
+   Samples: 300
+   📊 Architecture: gpt2
+   📊 Layers: 6, Hidden: 768, Vocab: 50257
+   ✅ 82 tensors loaded
+
+  ✅ Ep 1: Loss 0.0000 | 0.0s
+
+  ✅ Ep 2: Loss 0.0000 | 0.0s
+
+  ✅ Ep 3: Loss 0.0000 | 0.0s
+
+  ✅ Ep 4: Loss 0.0000 | 0.0s
+
+  ✅ Ep 5: Loss 0.0000 | 0.0s
+
+  ✅ Ep 6: Loss 0.0000 | 0.0s
+
+  ✅ Ep 7: Loss 0.0000 | 0.0s
+
+  ✅ Ep 8: Loss 0.0000 | 0.0s
+
+  ✅ Ep 9: Loss 0.0000 | 0.0s
+
+  ✅ Ep 10: Loss 0.0000 | 0.0s
+
+  ✅ Ep 11: Loss 0.0000 | 0.0s
+
+  ✅ Ep 12: Loss 0.0000 | 0.0s
+
+  ✅ Ep 13: Loss 0.0000 | 0.0s
+
+  ✅ Ep 14: Loss 0.0000 | 0.0s
+
+  ✅ Ep 15: Loss 0.0000 | 0.0s
+
+  ✅ Ep 16: Loss 0.0000 | 0.0s
+
+  ✅ Ep 17: Loss 0.0000 | 0.0s
+
+  ✅ Ep 18: Loss 0.0000 | 0.0s
+
+  ✅ Ep 19: Loss 0.0000 | 0.0s
+
+  ✅ Ep 20: Loss 0.0000 | 0.0s
+
+  ✅ Ep 21: Loss 0.0000 | 0.0s
+
+  ✅ Ep 22: Loss 0.0000 | 0.0s
+
+  ✅ Ep 23: Loss 0.0000 | 0.0s
+
+  ✅ Ep 24: Loss 0.0000 | 0.0s
+
+  ✅ Ep 25: Loss 0.0000 | 0.0s
+
+  ✅ Ep 26: Loss 0.0000 | 0.0s
+
+  ✅ Ep 27: Loss 0.0000 | 0.0s
+
+  ✅ Ep 28: Loss 0.0000 | 0.0s
+
+  ✅ Ep 29: Loss 0.0000 | 0.0s
+
+  ✅ Ep 30: Loss 0.0000 | 0.0s
+
+  ✅ Ep 31: Loss 0.0000 | 0.0s
+
+  ✅ Ep 32: Loss 0.0000 | 0.0s
+
+  ✅ Ep 33: Loss 0.0000 | 0.0s
+
+  ✅ Ep 34: Loss 0.0000 | 0.0s
+
+  ✅ Ep 35: Loss 0.0000 | 0.0s
+
+  ✅ Ep 36: Loss 0.0000 | 0.0s
+
+  ✅ Ep 37: Loss 0.0000 | 0.0s
+
+  ✅ Ep 38: Loss 0.0000 | 0.0s
+
+  ✅ Ep 39: Loss 0.0000 | 0.0s
+
+  ✅ Ep 40: Loss 0.0000 | 0.0s
+
+  ✅ Ep 41: Loss 0.0000 | 0.0s
+
+  ✅ Ep 42: Loss 0.0000 | 0.0s
+
+  ✅ Ep 43: Loss 0.0000 | 0.0s
+
+  ✅ Ep 44: Loss 0.0000 | 0.0s
+
+  ✅ Ep 45: Loss 0.0000 | 0.0s
+
+  ✅ Ep 46: Loss 0.0000 | 0.0s
+
+  ✅ Ep 47: Loss 0.0000 | 0.0s
+
+  ✅ Ep 48: Loss 0.0000 | 0.0s
+
+  ✅ Ep 49: Loss 0.0000 | 0.0s
+
+  ✅ Ep 50: Loss 0.0000 | 0.0s
+
+  ✅ Ep 51: Loss 0.0000 | 0.0s
+
+  ✅ Ep 52: Loss 0.0000 | 0.0s
+
+  ✅ Ep 53: Loss 0.0000 | 0.0s
+
+  ✅ Ep 54: Loss 0.0000 | 0.0s
+
+  ✅ Ep 55: Loss 0.0000 | 0.0s
+
+  ✅ Ep 56: Loss 0.0000 | 0.0s
+
+  ✅ Ep 57: Loss 0.0000 | 0.0s
+
+  ✅ Ep 58: Loss 0.0000 | 0.0s
+
+  ✅ Ep 59: Loss 0.0000 | 0.0s
+
+  ✅ Ep 60: Loss 0.0000 | 0.0s
+
+  ✅ Ep 61: Loss 0.0000 | 0.0s
+
+  ✅ Ep 62: Loss 0.0000 | 0.0s
+
+  ✅ Ep 63: Loss 0.0000 | 0.0s
+
+  ✅ Ep 64: Loss 0.0000 | 0.0s
+
+  ✅ Ep 65: Loss 0.0000 | 0.0s
+
+  ✅ Ep 66: Loss 0.0000 | 0.0s
+
+  ✅ Ep 67: Loss 0.0000 | 0.0s
+
+  ✅ Ep 68: Loss 0.0000 | 0.0s
+
+  ✅ Ep 69: Loss 0.0000 | 0.0s
+
+  ✅ Ep 70: Loss 0.0000 | 0.0s
+
+  ✅ Ep 71: Loss 0.0000 | 0.0s
+
+  ✅ Ep 72: Loss 0.0000 | 0.0s
+
+  ✅ Ep 73: Loss 0.0000 | 0.0s
+
+  ✅ Ep 74: Loss 0.0000 | 0.0s
+
+  ✅ Ep 75: Loss 0.0000 | 0.0s
+
+  ✅ Ep 76: Loss 0.0000 | 0.0s
+
+  ✅ Ep 77: Loss 0.0000 | 0.0s
+
+  ✅ Ep 78: Loss 0.0000 | 0.0s
+
+  ✅ Ep 79: Loss 0.0000 | 0.0s
+
+  ✅ Ep 80: Loss 0.0000 | 0.0s
+
+  ✅ Ep 81: Loss 0.0000 | 0.0s
+
+  ✅ Ep 82: Loss 0.0000 | 0.0s
+
+  ✅ Ep 83: Loss 0.0000 | 0.0s
+
+  ✅ Ep 84: Loss 0.0000 | 0.0s
+
+  ✅ Ep 85: Loss 0.0000 | 0.0s
+
+  ✅ Ep 86: Loss 0.0000 | 0.0s
+
+  ✅ Ep 87: Loss 0.0000 | 0.0s
+
+  ✅ Ep 88: Loss 0.0000 | 0.0s
+
+  ✅ Ep 89: Loss 0.0000 | 0.0s
+
+  ✅ Ep 90: Loss 0.0000 | 0.0s
+
+  ✅ Ep 91: Loss 0.0000 | 0.0s
+
+  ✅ Ep 92: Loss 0.0000 | 0.0s
+
+  ✅ Ep 93: Loss 0.0000 | 0.0s
+
+  ✅ Ep 94: Loss 0.0000 | 0.0s
+
+  ✅ Ep 95: Loss 0.0000 | 0.0s
+
+  ✅ Ep 96: Loss 0.0000 | 0.0s
+
+  ✅ Ep 97: Loss 0.0000 | 0.0s
+
+  ✅ Ep 98: Loss 0.0000 | 0.0s
+
+  ✅ Ep 99: Loss 0.0000 | 0.0s
+
+  ✅ Ep 100: Loss 0.0000 | 0.0s
+
+⏱ Total: 0.0s
+[1;32m💾 Saved at epoch 300 (970.0 MB)[0m
+
+🔄 Section 4/100, epochs 301-400
+
+🧠 TRUE KNOWLEDGE DISTILLATION
+   Epochs: 100
+   Samples: 300
+   📊 Architecture: gpt2
+   📊 Layers: 6, Hidden: 768, Vocab: 50257
+   ✅ 82 tensors loaded
+
+  ✅ Ep 1: Loss 0.0000 | 0.0s
+
+  ✅ Ep 2: Loss 0.0000 | 0.0s
+
+  ✅ Ep 3: Loss 0.0000 | 0.0s
+
+  ✅ Ep 4: Loss 0.0000 | 0.0s
+
+  ✅ Ep 5: Loss 0.0000 | 0.0s
+
+  ✅ Ep 6: Loss 0.0000 | 0.0s
+
+  ✅ Ep 7: Loss 0.0000 | 0.0s
+
+  ✅ Ep 8: Loss 0.0000 | 0.0s
+
+  ✅ Ep 9: Loss 0.0000 | 0.0s
+
+  ✅ Ep 10: Loss 0.0000 | 0.0s
+
+  ✅ Ep 11: Loss 0.0000 | 0.0s
+
+  ✅ Ep 12: Loss 0.0000 | 0.0s
+
+  ✅ Ep 13: Loss 0.0000 | 0.0s
+
+  ✅ Ep 14: Loss 0.0000 | 0.0s
+
+  ✅ Ep 15: Loss 0.0000 | 0.0s
+
+  ✅ Ep 16: Loss 0.0000 | 0.0s
+
+  ✅ Ep 17: Loss 0.0000 | 0.0s
+
+  ✅ Ep 18: Loss 0.0000 | 0.0s
+
+  ✅ Ep 19: Loss 0.0000 | 0.0s
+
+  ✅ Ep 20: Loss 0.0000 | 0.0s
+
+  ✅ Ep 21: Loss 0.0000 | 0.0s
+
+  ✅ Ep 22: Loss 0.0000 | 0.0s
+
+  ✅ Ep 23: Loss 0.0000 | 0.0s
+
+  ✅ Ep 24: Loss 0.0000 | 0.0s
+
+  ✅ Ep 25: Loss 0.0000 | 0.0s
+
+  ✅ Ep 26: Loss 0.0000 | 0.0s
+
+  ✅ Ep 27: Loss 0.0000 | 0.0s
+
+  ✅ Ep 28: Loss 0.0000 | 0.0s
+
+  ✅ Ep 29: Loss 0.0000 | 0.0s
+
+  ✅ Ep 30: Loss 0.0000 | 0.0s
+
+  ✅ Ep 31: Loss 0.0000 | 0.0s
+
+  ✅ Ep 32: Loss 0.0000 | 0.0s
+
+  ✅ Ep 33: Loss 0.0000 | 0.0s
+
+  ✅ Ep 34: Loss 0.0000 | 0.0s
+
+  ✅ Ep 35: Loss 0.0000 | 0.0s
+
+  ✅ Ep 36: Loss 0.0000 | 0.0s
+
+  ✅ Ep 37: Loss 0.0000 | 0.0s
+
+  ✅ Ep 38: Loss 0.0000 | 0.0s
+
+  ✅ Ep 39: Loss 0.0000 | 0.0s
+
+  ✅ Ep 40: Loss 0.0000 | 0.0s
+
+  ✅ Ep 41: Loss 0.0000 | 0.0s
+
+  ✅ Ep 42: Loss 0.0000 | 0.0s
+
+  ✅ Ep 43: Loss 0.0000 | 0.0s
+
+  ✅ Ep 44: Loss 0.0000 | 0.0s
+
+  ✅ Ep 45: Loss 0.0000 | 0.0s
+
+  ✅ Ep 46: Loss 0.0000 | 0.0s
+
+  ✅ Ep 47: Loss 0.0000 | 0.0s
+
+  ✅ Ep 48: Loss 0.0000 | 0.0s
+
+  ✅ Ep 49: Loss 0.0000 | 0.0s
+
+  ✅ Ep 50: Loss 0.0000 | 0.0s
+
+  ✅ Ep 51: Loss 0.0000 | 0.0s
+
+  ✅ Ep 52: Loss 0.0000 | 0.0s
+
+  ✅ Ep 53: Loss 0.0000 | 0.0s
+
+  ✅ Ep 54: Loss 0.0000 | 0.0s
+
+  ✅ Ep 55: Loss 0.0000 | 0.0s
+
+  ✅ Ep 56: Loss 0.0000 | 0.0s
+
+  ✅ Ep 57: Loss 0.0000 | 0.0s
+
+  ✅ Ep 58: Loss 0.0000 | 0.0s
+
+  ✅ Ep 59: Loss 0.0000 | 0.0s
+
+  ✅ Ep 60: Loss 0.0000 | 0.0s
+
+  ✅ Ep 61: Loss 0.0000 | 0.0s
+
+  ✅ Ep 62: Loss 0.0000 | 0.0s
+
+  ✅ Ep 63: Loss 0.0000 | 0.0s
+
+  ✅ Ep 64: Loss 0.0000 | 0.0s
+
+  ✅ Ep 65: Loss 0.0000 | 0.0s
+
+  ✅ Ep 66: Loss 0.0000 | 0.0s
+
+  ✅ Ep 67: Loss 0.0000 | 0.0s
+
+  ✅ Ep 68: Loss 0.0000 | 0.0s
+
+  ✅ Ep 69: Loss 0.0000 | 0.0s
+
+  ✅ Ep 70: Loss 0.0000 | 0.0s
+
+  ✅ Ep 71: Loss 0.0000 | 0.0s
+
+  ✅ Ep 72: Loss 0.0000 | 0.0s
+
+  ✅ Ep 73: Loss 0.0000 | 0.0s
+
+  ✅ Ep 74: Loss 0.0000 | 0.0s
+
+  ✅ Ep 75: Loss 0.0000 | 0.0s
+
+  ✅ Ep 76: Loss 0.0000 | 0.0s
+
+  ✅ Ep 77: Loss 0.0000 | 0.0s
+
+  ✅ Ep 78: Loss 0.0000 | 0.0s
+
+  ✅ Ep 79: Loss 0.0000 | 0.0s
+
+  ✅ Ep 80: Loss 0.0000 | 0.0s
+
+  ✅ Ep 81: Loss 0.0000 | 0.0s
+
+  ✅ Ep 82: Loss 0.0000 | 0.0s
+
+  ✅ Ep 83: Loss 0.0000 | 0.0s
+
+  ✅ Ep 84: Loss 0.0000 | 0.0s
+
+  ✅ Ep 85: Loss 0.0000 | 0.0s
+
+  ✅ Ep 86: Loss 0.0000 | 0.0s
+
+  ✅ Ep 87: Loss 0.0000 | 0.0s
+
+  ✅ Ep 88: Loss 0.0000 | 0.0s
+
+  ✅ Ep 89: Loss 0.0000 | 0.0s
+
+  ✅ Ep 90: Loss 0.0000 | 0.0s
+
+  ✅ Ep 91: Loss 0.0000 | 0.0s
+
+  ✅ Ep 92: Loss 0.0000 | 0.0s
+
+  ✅ Ep 93: Loss 0.0000 | 0.0s
+
+  ✅ Ep 94: Loss 0.0000 | 0.0s
+
+  ✅ Ep 95: Loss 0.0000 | 0.0s
+
+  ✅ Ep 96: Loss 0.0000 | 0.0s
+
+  ✅ Ep 97: Loss 0.0000 | 0.0s
+
+  ✅ Ep 98: Loss 0.0000 | 0.0s
+
+  ✅ Ep 99: Loss 0.0000 | 0.0s
+
+  ✅ Ep 100: Loss 0.0000 | 0.0s
+
+⏱ Total: 0.0s
+[1;32m💾 Saved at epoch 400 (970.0 MB)[0m
+
+🔄 Section 5/100, epochs 401-500
+
+🧠 TRUE KNOWLEDGE DISTILLATION
+   Epochs: 100
+   Samples: 300
+   📊 Architecture: gpt2
+   📊 Layers: 6, Hidden: 768, Vocab: 50257
+   ✅ 82 tensors loaded
+
+  ✅ Ep 1: Loss 0.0000 | 0.0s
+
+  ✅ Ep 2: Loss 0.0000 | 0.0s
+
+  ✅ Ep 3: Loss 0.0000 | 0.0s
+
+  ✅ Ep 4: Loss 0.0000 | 0.0s
+
+  ✅ Ep 5: Loss 0.0000 | 0.0s
+
+  ✅ Ep 6: Loss 0.0000 | 0.0s
+
+  ✅ Ep 7: Loss 0.0000 | 0.0s
+
+  ✅ Ep 8: Loss 0.0000 | 0.0s
+
+  ✅ Ep 9: Loss 0.0000 | 0.0s
+
+  ✅ Ep 10: Loss 0.0000 | 0.0s
+
+  ✅ Ep 11: Loss 0.0000 | 0.0s
+
+  ✅ Ep 12: Loss 0.0000 | 0.0s
+
+  ✅ Ep 13: Loss 0.0000 | 0.0s
+
+  ✅ Ep 14: Loss 0.0000 | 0.0s
+
+  ✅ Ep 15: Loss 0.0000 | 0.0s
+
+  ✅ Ep 16: Loss 0.0000 | 0.0s
+
+  ✅ Ep 17: Loss 0.0000 | 0.0s
+
+  ✅ Ep 18: Loss 0.0000 | 0.0s
+
+  ✅ Ep 19: Loss 0.0000 | 0.0s
+
+  ✅ Ep 20: Loss 0.0000 | 0.0s
+
+  ✅ Ep 21: Loss 0.0000 | 0.0s
+
+  ✅ Ep 22: Loss 0.0000 | 0.0s
+
+  ✅ Ep 23: Loss 0.0000 | 0.0s
+
+  ✅ Ep 24: Loss 0.0000 | 0.0s
+
+  ✅ Ep 25: Loss 0.0000 | 0.0s
+
+  ✅ Ep 26: Loss 0.0000 | 0.0s
+
+  ✅ Ep 27: Loss 0.0000 | 0.0s
+
+  ✅ Ep 28: Loss 0.0000 | 0.0s
+
+  ✅ Ep 29: Loss 0.0000 | 0.0s
+
+  ✅ Ep 30: Loss 0.0000 | 0.0s
+
+  ✅ Ep 31: Loss 0.0000 | 0.0s
+
+  ✅ Ep 32: Loss 0.0000 | 0.0s
+
+  ✅ Ep 33: Loss 0.0000 | 0.0s
+
+  ✅ Ep 34: Loss 0.0000 | 0.0s
+
+  ✅ Ep 35: Loss 0.0000 | 0.0s
+
+  ✅ Ep 36: Loss 0.0000 | 0.0s
+
+  ✅ Ep 37: Loss 0.0000 | 0.0s
+
+  ✅ Ep 38: Loss 0.0000 | 0.0s
+
+  ✅ Ep 39: Loss 0.0000 | 0.0s
+
+  ✅ Ep 40: Loss 0.0000 | 0.0s
+
+  ✅ Ep 41: Loss 0.0000 | 0.0s
+
+  ✅ Ep 42: Loss 0.0000 | 0.0s
+
+  ✅ Ep 43: Loss 0.0000 | 0.0s
+
+  ✅ Ep 44: Loss 0.0000 | 0.0s
+
+  ✅ Ep 45: Loss 0.0000 | 0.0s
+
+  ✅ Ep 46: Loss 0.0000 | 0.0s
+
+  ✅ Ep 47: Loss 0.0000 | 0.0s
+
+  ✅ Ep 48: Loss 0.0000 | 0.0s
+
+  ✅ Ep 49: Loss 0.0000 | 0.0s
+
+  ✅ Ep 50: Loss 0.0000 | 0.0s
+
+  ✅ Ep 51: Loss 0.0000 | 0.0s
+
+  ✅ Ep 52: Loss 0.0000 | 0.0s
+
+  ✅ Ep 53: Loss 0.0000 | 0.0s
+
+  ✅ Ep 54: Loss 0.0000 | 0.0s
+
+  ✅ Ep 55: Loss 0.0000 | 0.0s
+
+  ✅ Ep 56: Loss 0.0000 | 0.0s
+
+  ✅ Ep 57: Loss 0.0000 | 0.0s
+
+  ✅ Ep 58: Loss 0.0000 | 0.0s
+
+  ✅ Ep 59: Loss 0.0000 | 0.0s
+
+  ✅ Ep 60: Loss 0.0000 | 0.0s
+
+  ✅ Ep 61: Loss 0.0000 | 0.0s
+
+  ✅ Ep 62: Loss 0.0000 | 0.0s
+
+  ✅ Ep 63: Loss 0.0000 | 0.0s
+
+  ✅ Ep 64: Loss 0.0000 | 0.0s
+
+  ✅ Ep 65: Loss 0.0000 | 0.0s
+
+  ✅ Ep 66: Loss 0.0000 | 0.0s
+
+  ✅ Ep 67: Loss 0.0000 | 0.0s
+
+  ✅ Ep 68: Loss 0.0000 | 0.0s
+
+  ✅ Ep 69: Loss 0.0000 | 0.0s
+
+  ✅ Ep 70: Loss 0.0000 | 0.0s
+
+  ✅ Ep 71: Loss 0.0000 | 0.0s
+
+  ✅ Ep 72: Loss 0.0000 | 0.0s
+
+  ✅ Ep 73: Loss 0.0000 | 0.0s
+
+  ✅ Ep 74: Loss 0.0000 | 0.0s
+
+  ✅ Ep 75: Loss 0.0000 | 0.0s
+
+  ✅ Ep 76: Loss 0.0000 | 0.0s
+
+  ✅ Ep 77: Loss 0.0000 | 0.0s
+
+  ✅ Ep 78: Loss 0.0000 | 0.0s
+
+  ✅ Ep 79: Loss 0.0000 | 0.0s
+
+  ✅ Ep 80: Loss 0.0000 | 0.0s
+
+  ✅ Ep 81: Loss 0.0000 | 0.0s
+
+  ✅ Ep 82: Loss 0.0000 | 0.0s
+
+  ✅ Ep 83: Loss 0.0000 | 0.0s
+
+  ✅ Ep 84: Loss 0.0000 | 0.0s
+
+  ✅ Ep 85: Loss 0.0000 | 0.0s
+
+  ✅ Ep 86: Loss 0.0000 | 0.0s
+
+  ✅ Ep 87: Loss 0.0000 | 0.0s
+
+  ✅ Ep 88: Loss 0.0000 | 0.0s
+
+  ✅ Ep 89: Loss 0.0000 | 0.0s
+
+  ✅ Ep 90: Loss 0.0000 | 0.0s
+
+  ✅ Ep 91: Loss 0.0000 | 0.0s
+
+  ✅ Ep 92: Loss 0.0000 | 0.0s
+
+  ✅ Ep 93: Loss 0.0000 | 0.0s
+
+  ✅ Ep 94: Loss 0.0000 | 0.0s
+
+  ✅ Ep 95: Loss 0.0000 | 0.0s
+
+  ✅ Ep 96: Loss 0.0000 | 0.0s
+
+  ✅ Ep 97: Loss 0.0000 | 0.0s
+
+  ✅ Ep 98: Loss 0.0000 | 0.0s
+
+  ✅ Ep 99: Loss 0.0000 | 0.0s
+
+  ✅ Ep 100: Loss 0.0000 | 0.0s
+
+⏱ Total: 0.0s
+[1;32m💾 Saved at epoch 500 (970.0 MB)[0m
+
+🔄 Section 6/100, epochs 501-600
+
+🧠 TRUE KNOWLEDGE DISTILLATION
+   Epochs: 100
+   Samples: 300
+   📊 Architecture: gpt2
+   📊 Layers: 6, Hidden: 768, Vocab: 50257
+   ✅ 82 tensors loaded
+
+  ✅ Ep 1: Loss 0.0000 | 0.0s
+
+  ✅ Ep 2: Loss 0.0000 | 0.0s
+
+  ✅ Ep 3: Loss 0.0000 | 0.0s
+
+  ✅ Ep 4: Loss 0.0000 | 0.0s
+
+  ✅ Ep 5: Loss 0.0000 | 0.0s
+
+  ✅ Ep 6: Loss 0.0000 | 0.0s
+
+  ✅ Ep 7: Loss 0.0000 | 0.0s
+
+  ✅ Ep 8: Loss 0.0000 | 0.0s
+
+  ✅ Ep 9: Loss 0.0000 | 0.0s
+
+  ✅ Ep 10: Loss 0.0000 | 0.0s
+
+  ✅ Ep 11: Loss 0.0000 | 0.0s
+
+  ✅ Ep 12: Loss 0.0000 | 0.0s
+
+  ✅ Ep 13: Loss 0.0000 | 0.0s
+
+  ✅ Ep 14: Loss 0.0000 | 0.0s
+
+  ✅ Ep 15: Loss 0.0000 | 0.0s
+
+  ✅ Ep 16: Loss 0.0000 | 0.0s
+
+  ✅ Ep 17: Loss 0.0000 | 0.0s
+
+  ✅ Ep 18: Loss 0.0000 | 0.0s
+
+  ✅ Ep 19: Loss 0.0000 | 0.0s
+
+  ✅ Ep 20: Loss 0.0000 | 0.0s
+
+  ✅ Ep 21: Loss 0.0000 | 0.0s
+
+  ✅ Ep 22: Loss 0.0000 | 0.0s
+
+  ✅ Ep 23: Loss 0.0000 | 0.0s
+
+  ✅ Ep 24: Loss 0.0000 | 0.0s
+
+  ✅ Ep 25: Loss 0.0000 | 0.0s
+
+  ✅ Ep 26: Loss 0.0000 | 0.0s
+
+  ✅ Ep 27: Loss 0.0000 | 0.0s
+
+  ✅ Ep 28: Loss 0.0000 | 0.0s
+
+  ✅ Ep 29: Loss 0.0000 | 0.0s
+
+  ✅ Ep 30: Loss 0.0000 | 0.0s
+
+  ✅ Ep 31: Loss 0.0000 | 0.0s
+
+  ✅ Ep 32: Loss 0.0000 | 0.0s
+
+  ✅ Ep 33: Loss 0.0000 | 0.0s
+
+  ✅ Ep 34: Loss 0.0000 | 0.0s
+
+  ✅ Ep 35: Loss 0.0000 | 0.0s
+
+  ✅ Ep 36: Loss 0.0000 | 0.0s
+
+  ✅ Ep 37: Loss 0.0000 | 0.0s
+
+  ✅ Ep 38: Loss 0.0000 | 0.0s
+
+  ✅ Ep 39: Loss 0.0000 | 0.0s
+
+  ✅ Ep 40: Loss 0.0000 | 0.0s
+
+  ✅ Ep 41: Loss 0.0000 | 0.0s
+
+  ✅ Ep 42: Loss 0.0000 | 0.0s
+
+  ✅ Ep 43: Loss 0.0000 | 0.0s
+
+  ✅ Ep 44: Loss 0.0000 | 0.0s
+
+  ✅ Ep 45: Loss 0.0000 | 0.0s
+
+  ✅ Ep 46: Loss 0.0000 | 0.0s
+
+  ✅ Ep 47: Loss 0.0000 | 0.0s
+
+  ✅ Ep 48: Loss 0.0000 | 0.0s
+
+  ✅ Ep 49: Loss 0.0000 | 0.0s
+
+  ✅ Ep 50: Loss 0.0000 | 0.0s
+
+  ✅ Ep 51: Loss 0.0000 | 0.0s
+
+  ✅ Ep 52: Loss 0.0000 | 0.0s
+
+  ✅ Ep 53: Loss 0.0000 | 0.0s
+
+  ✅ Ep 54: Loss 0.0000 | 0.0s
+
+  ✅ Ep 55: Loss 0.0000 | 0.0s
+
+  ✅ Ep 56: Loss 0.0000 | 0.0s
+
+  ✅ Ep 57: Loss 0.0000 | 0.0s
+
+  ✅ Ep 58: Loss 0.0000 | 0.0s
+
+  ✅ Ep 59: Loss 0.0000 | 0.0s
+
+  ✅ Ep 60: Loss 0.0000 | 0.0s
+
+  ✅ Ep 61: Loss 0.0000 | 0.0s
+
+  ✅ Ep 62: Loss 0.0000 | 0.0s
+
+  ✅ Ep 63: Loss 0.0000 | 0.0s
+
+  ✅ Ep 64: Loss 0.0000 | 0.0s
+
+  ✅ Ep 65: Loss 0.0000 | 0.0s
+
+  ✅ Ep 66: Loss 0.0000 | 0.0s
+
+  ✅ Ep 67: Loss 0.0000 | 0.0s
+
+  ✅ Ep 68: Loss 0.0000 | 0.0s
+
+  ✅ Ep 69: Loss 0.0000 | 0.0s
+
+  ✅ Ep 70: Loss 0.0000 | 0.0s
+
+  ✅ Ep 71: Loss 0.0000 | 0.0s
+
+  ✅ Ep 72: Loss 0.0000 | 0.0s
+
+  ✅ Ep 73: Loss 0.0000 | 0.0s
+
+  ✅ Ep 74: Loss 0.0000 | 0.0s
+
+  ✅ Ep 75: Loss 0.0000 | 0.0s
+
+  ✅ Ep 76: Loss 0.0000 | 0.0s
+
+  ✅ Ep 77: Loss 0.0000 | 0.0s
+
+  ✅ Ep 78: Loss 0.0000 | 0.0s
+
+  ✅ Ep 79: Loss 0.0000 | 0.0s
+
+  ✅ Ep 80: Loss 0.0000 | 0.0s
+
+  ✅ Ep 81: Loss 0.0000 | 0.0s
+
+  ✅ Ep 82: Loss 0.0000 | 0.0s
+
+  ✅ Ep 83: Loss 0.0000 | 0.0s
+
+  ✅ Ep 84: Loss 0.0000 | 0.0s
+
+  ✅ Ep 85: Loss 0.0000 | 0.0s
+
+  ✅ Ep 86: Loss 0.0000 | 0.0s
+
+  ✅ Ep 87: Loss 0.0000 | 0.0s
+
+  ✅ Ep 88: Loss 0.0000 | 0.0s
+
+  ✅ Ep 89: Loss 0.0000 | 0.0s
+
+  ✅ Ep 90: Loss 0.0000 | 0.0s
+
+  ✅ Ep 91: Loss 0.0000 | 0.0s
+
+  ✅ Ep 92: Loss 0.0000 | 0.0s
+
+  ✅ Ep 93: Loss 0.0000 | 0.0s
+
+  ✅ Ep 94: Loss 0.0000 | 0.0s
+
+  ✅ Ep 95: Loss 0.0000 | 0.0s
+
+  ✅ Ep 96: Loss 0.0000 | 0.0s
+
+  ✅ Ep 97: Loss 0.0000 | 0.0s
+
+  ✅ Ep 98: Loss 0.0000 | 0.0s
+
+  ✅ Ep 99: Loss 0.0000 | 0.0s
+
+  ✅ Ep 100: Loss 0.0000 | 0.0s
+
+⏱ Total: 0.0s
+[1;32m💾 Saved at epoch 600 (970.0 MB)[0m
+
+🔄 Section 7/100, epochs 601-700
+
+🧠 TRUE KNOWLEDGE DISTILLATION
+   Epochs: 100
+   Samples: 300
+   📊 Architecture: gpt2
+   📊 Layers: 6, Hidden: 768, Vocab: 50257
+   ✅ 82 tensors loaded
+
+  ✅ Ep 1: Loss 0.0000 | 0.0s
+
+  ✅ Ep 2: Loss 0.0000 | 0.0s
+
+  ✅ Ep 3: Loss 0.0000 | 0.0s
+
+  ✅ Ep 4: Loss 0.0000 | 0.0s
+
+  ✅ Ep 5: Loss 0.0000 | 0.0s
+
+  ✅ Ep 6: Loss 0.0000 | 0.0s
+
+  ✅ Ep 7: Loss 0.0000 | 0.0s
+
+  ✅ Ep 8: Loss 0.0000 | 0.0s
+
+  ✅ Ep 9: Loss 0.0000 | 0.0s
+
+  ✅ Ep 10: Loss 0.0000 | 0.0s
+
+  ✅ Ep 11: Loss 0.0000 | 0.0s
+
+  ✅ Ep 12: Loss 0.0000 | 0.0s
+
+  ✅ Ep 13: Loss 0.0000 | 0.0s
+
+  ✅ Ep 14: Loss 0.0000 | 0.0s
+
+  ✅ Ep 15: Loss 0.0000 | 0.0s
+
+  ✅ Ep 16: Loss 0.0000 | 0.0s
+
+  ✅ Ep 17: Loss 0.0000 | 0.0s
+
+  ✅ Ep 18: Loss 0.0000 | 0.0s
+
+  ✅ Ep 19: Loss 0.0000 | 0.0s
+
+  ✅ Ep 20: Loss 0.0000 | 0.0s
+
+  ✅ Ep 21: Loss 0.0000 | 0.0s
+
+  ✅ Ep 22: Loss 0.0000 | 0.0s
+
+  ✅ Ep 23: Loss 0.0000 | 0.0s
+
+  ✅ Ep 24: Loss 0.0000 | 0.0s
+
+  ✅ Ep 25: Loss 0.0000 | 0.0s
+
+  ✅ Ep 26: Loss 0.0000 | 0.0s
+
+  ✅ Ep 27: Loss 0.0000 | 0.0s
+
+  ✅ Ep 28: Loss 0.0000 | 0.0s
+
+  ✅ Ep 29: Loss 0.0000 | 0.0s
+
+  ✅ Ep 30: Loss 0.0000 | 0.0s
+
+  ✅ Ep 31: Loss 0.0000 | 0.0s
+
+  ✅ Ep 32: Loss 0.0000 | 0.0s
+
+  ✅ Ep 33: Loss 0.0000 | 0.0s
+
+  ✅ Ep 34: Loss 0.0000 | 0.0s
+
+  ✅ Ep 35: Loss 0.0000 | 0.0s
+
+  ✅ Ep 36: Loss 0.0000 | 0.0s
+
+  ✅ Ep 37: Loss 0.0000 | 0.0s
+
+  ✅ Ep 38: Loss 0.0000 | 0.0s
+
+  ✅ Ep 39: Loss 0.0000 | 0.0s
+
+  ✅ Ep 40: Loss 0.0000 | 0.0s
+
+  ✅ Ep 41: Loss 0.0000 | 0.0s
+
+  ✅ Ep 42: Loss 0.0000 | 0.0s
+
+  ✅ Ep 43: Loss 0.0000 | 0.0s
+
+  ✅ Ep 44: Loss 0.0000 | 0.0s
+
+  ✅ Ep 45: Loss 0.0000 | 0.0s
+
+  ✅ Ep 46: Loss 0.0000 | 0.0s
+
+  ✅ Ep 47: Loss 0.0000 | 0.0s
+
+  ✅ Ep 48: Loss 0.0000 | 0.0s
+
+  ✅ Ep 49: Loss 0.0000 | 0.0s
+
+  ✅ Ep 50: Loss 0.0000 | 0.0s
+
+  ✅ Ep 51: Loss 0.0000 | 0.0s
+
+  ✅ Ep 52: Loss 0.0000 | 0.0s
+
+  ✅ Ep 53: Loss 0.0000 | 0.0s
+
+  ✅ Ep 54: Loss 0.0000 | 0.0s
+
+  ✅ Ep 55: Loss 0.0000 | 0.0s
+
+  ✅ Ep 56: Loss 0.0000 | 0.0s
+
+  ✅ Ep 57: Loss 0.0000 | 0.0s
+
+  ✅ Ep 58: Loss 0.0000 | 0.0s
+
+  ✅ Ep 59: Loss 0.0000 | 0.0s
+
+  ✅ Ep 60: Loss 0.0000 | 0.0s
+
+  ✅ Ep 61: Loss 0.0000 | 0.0s
+
+  ✅ Ep 62: Loss 0.0000 | 0.0s
+
+  ✅ Ep 63: Loss 0.0000 | 0.0s
+
+  ✅ Ep 64: Loss 0.0000 | 0.0s
+
+  ✅ Ep 65: Loss 0.0000 | 0.0s
+
+  ✅ Ep 66: Loss 0.0000 | 0.0s
+
+  ✅ Ep 67: Loss 0.0000 | 0.0s
+
+  ✅ Ep 68: Loss 0.0000 | 0.0s
+
+  ✅ Ep 69: Loss 0.0000 | 0.0s
+
+  ✅ Ep 70: Loss 0.0000 | 0.0s
+
+  ✅ Ep 71: Loss 0.0000 | 0.0s
+
+  ✅ Ep 72: Loss 0.0000 | 0.0s
+
+  ✅ Ep 73: Loss 0.0000 | 0.0s
+
+  ✅ Ep 74: Loss 0.0000 | 0.0s
+
+  ✅ Ep 75: Loss 0.0000 | 0.0s
+
+  ✅ Ep 76: Loss 0.0000 | 0.0s
+
+  ✅ Ep 77: Loss 0.0000 | 0.0s
+
+  ✅ Ep 78: Loss 0.0000 | 0.0s
+
+  ✅ Ep 79: Loss 0.0000 | 0.0s
+
+  ✅ Ep 80: Loss 0.0000 | 0.0s
+
+  ✅ Ep 81: Loss 0.0000 | 0.0s
+
+  ✅ Ep 82: Loss 0.0000 | 0.0s
+
+  ✅ Ep 83: Loss 0.0000 | 0.0s
+
+  ✅ Ep 84: Loss 0.0000 | 0.0s
+
+  ✅ Ep 85: Loss 0.0000 | 0.0s
+
+  ✅ Ep 86: Loss 0.0000 | 0.0s
+
+  ✅ Ep 87: Loss 0.0000 | 0.0s
+
+  ✅ Ep 88: Loss 0.0000 | 0.0s
+
+  ✅ Ep 89: Loss 0.0000 | 0.0s
+
+  ✅ Ep 90: Loss 0.0000 | 0.0s
+
+  ✅ Ep 91: Loss 0.0000 | 0.0s
+
+  ✅ Ep 92: Loss 0.0000 | 0.0s
+
+  ✅ Ep 93: Loss 0.0000 | 0.0s
+
+  ✅ Ep 94: Loss 0.0000 | 0.0s
+
+  ✅ Ep 95: Loss 0.0000 | 0.0s
+
+  ✅ Ep 96: Loss 0.0000 | 0.0s
+
+  ✅ Ep 97: Loss 0.0000 | 0.0s
+
+  ✅ Ep 98: Loss 0.0000 | 0.0s
+
+  ✅ Ep 99: Loss 0.0000 | 0.0s
+
+  ✅ Ep 100: Loss 0.0000 | 0.0s
+
+⏱ Total: 0.0s
+[1;32m💾 Saved at epoch 700 (970.0 MB)[0m
+
+🔄 Section 8/100, epochs 701-800
+
+🧠 TRUE KNOWLEDGE DISTILLATION
+   Epochs: 100
+   Samples: 300
+   📊 Architecture: gpt2
+   📊 Layers: 6, Hidden: 768, Vocab: 50257
+   ✅ 82 tensors loaded
+
+  ✅ Ep 1: Loss 0.0000 | 0.0s
+
+  ✅ Ep 2: Loss 0.0000 | 0.0s
+
+  ✅ Ep 3: Loss 0.0000 | 0.0s
+
+  ✅ Ep 4: Loss 0.0000 | 0.0s
+
+  ✅ Ep 5: Loss 0.0000 | 0.0s
+
+  ✅ Ep 6: Loss 0.0000 | 0.0s
+
+  ✅ Ep 7: Loss 0.0000 | 0.0s
+
+  ✅ Ep 8: Loss 0.0000 | 0.0s
+
+  ✅ Ep 9: Loss 0.0000 | 0.0s
+
+  ✅ Ep 10: Loss 0.0000 | 0.0s
+
+  ✅ Ep 11: Loss 0.0000 | 0.0s
+
+  ✅ Ep 12: Loss 0.0000 | 0.0s
+
+  ✅ Ep 13: Loss 0.0000 | 0.0s
+
+  ✅ Ep 14: Loss 0.0000 | 0.0s
+
+  ✅ Ep 15: Loss 0.0000 | 0.0s
+
+  ✅ Ep 16: Loss 0.0000 | 0.0s
+
+  ✅ Ep 17: Loss 0.0000 | 0.0s
+
+  ✅ Ep 18: Loss 0.0000 | 0.0s
+
+  ✅ Ep 19: Loss 0.0000 | 0.0s
+
+  ✅ Ep 20: Loss 0.0000 | 0.0s
+
+  ✅ Ep 21: Loss 0.0000 | 0.0s
+
+  ✅ Ep 22: Loss 0.0000 | 0.0s
+
+  ✅ Ep 23: Loss 0.0000 | 0.0s
+
+  ✅ Ep 24: Loss 0.0000 | 0.0s
+
+  ✅ Ep 25: Loss 0.0000 | 0.0s
+
+  ✅ Ep 26: Loss 0.0000 | 0.0s
+
+  ✅ Ep 27: Loss 0.0000 | 0.0s
+
+  ✅ Ep 28: Loss 0.0000 | 0.0s
+
+  ✅ Ep 29: Loss 0.0000 | 0.0s
+
+  ✅ Ep 30: Loss 0.0000 | 0.0s
+
+  ✅ Ep 31: Loss 0.0000 | 0.0s
+
+  ✅ Ep 32: Loss 0.0000 | 0.0s
+
+  ✅ Ep 33: Loss 0.0000 | 0.0s
+
+  ✅ Ep 34: Loss 0.0000 | 0.0s
+
+  ✅ Ep 35: Loss 0.0000 | 0.0s
+
+  ✅ Ep 36: Loss 0.0000 | 0.0s
+
+  ✅ Ep 37: Loss 0.0000 | 0.0s
+
+  ✅ Ep 38: Loss 0.0000 | 0.0s
+
+  ✅ Ep 39: Loss 0.0000 | 0.0s
+
+  ✅ Ep 40: Loss 0.0000 | 0.0s
+
+  ✅ Ep 41: Loss 0.0000 | 0.0s
+
+  ✅ Ep 42: Loss 0.0000 | 0.0s
+
+  ✅ Ep 43: Loss 0.0000 | 0.0s
+
+  ✅ Ep 44: Loss 0.0000 | 0.0s
+
+  ✅ Ep 45: Loss 0.0000 | 0.0s
+
+  ✅ Ep 46: Loss 0.0000 | 0.0s
+
+  ✅ Ep 47: Loss 0.0000 | 0.0s
+
+  ✅ Ep 48: Loss 0.0000 | 0.0s
+
+  ✅ Ep 49: Loss 0.0000 | 0.0s
+
+  ✅ Ep 50: Loss 0.0000 | 0.0s
+
+  ✅ Ep 51: Loss 0.0000 | 0.0s
+
+  ✅ Ep 52: Loss 0.0000 | 0.0s
+
+  ✅ Ep 53: Loss 0.0000 | 0.0s
+
+  ✅ Ep 54: Loss 0.0000 | 0.0s
+
+  ✅ Ep 55: Loss 0.0000 | 0.0s
+
+  ✅ Ep 56: Loss 0.0000 | 0.0s
+
+  ✅ Ep 57: Loss 0.0000 | 0.0s
+
+  ✅ Ep 58: Loss 0.0000 | 0.0s
+
+  ✅ Ep 59: Loss 0.0000 | 0.0s
+
+  ✅ Ep 60: Loss 0.0000 | 0.0s
+
+  ✅ Ep 61: Loss 0.0000 | 0.0s
+
+  ✅ Ep 62: Loss 0.0000 | 0.0s
+
+  ✅ Ep 63: Loss 0.0000 | 0.0s
+
+  ✅ Ep 64: Loss 0.0000 | 0.0s
+
+  ✅ Ep 65: Loss 0.0000 | 0.0s
+
+  ✅ Ep 66: Loss 0.0000 | 0.0s
+
+  ✅ Ep 67: Loss 0.0000 | 0.0s
+
+  ✅ Ep 68: Loss 0.0000 | 0.0s
+
+  ✅ Ep 69: Loss 0.0000 | 0.0s
+
+  ✅ Ep 70: Loss 0.0000 | 0.0s
+
+  ✅ Ep 71: Loss 0.0000 | 0.0s
+
+  ✅ Ep 72: Loss 0.0000 | 0.0s
+
+  ✅ Ep 73: Loss 0.0000 | 0.0s
+
+  ✅ Ep 74: Loss 0.0000 | 0.0s
+
+  ✅ Ep 75: Loss 0.0000 | 0.0s
+
+  ✅ Ep 76: Loss 0.0000 | 0.0s
+
+  ✅ Ep 77: Loss 0.0000 | 0.0s
+
+  ✅ Ep 78: Loss 0.0000 | 0.0s
+
+  ✅ Ep 79: Loss 0.0000 | 0.0s
+
+  ✅ Ep 80: Loss 0.0000 | 0.0s
+
+  ✅ Ep 81: Loss 0.0000 | 0.0s
+
+  ✅ Ep 82: Loss 0.0000 | 0.0s
+
+  ✅ Ep 83: Loss 0.0000 | 0.0s
+
+  ✅ Ep 84: Loss 0.0000 | 0.0s
+
+  ✅ Ep 85: Loss 0.0000 | 0.0s
+
+  ✅ Ep 86: Loss 0.0000 | 0.0s
+
+  ✅ Ep 87: Loss 0.0000 | 0.0s
+
+  ✅ Ep 88: Loss 0.0000 | 0.0s
+
+  ✅ Ep 89: Loss 0.0000 | 0.0s
+
+  ✅ Ep 90: Loss 0.0000 | 0.0s
+
+  ✅ Ep 91: Loss 0.0000 | 0.0s
+
+  ✅ Ep 92: Loss 0.0000 | 0.0s
+
+  ✅ Ep 93: Loss 0.0000 | 0.0s
+
+  ✅ Ep 94: Loss 0.0000 | 0.0s
+
+  ✅ Ep 95: Loss 0.0000 | 0.0s
+
+  ✅ Ep 96: Loss 0.0000 | 0.0s
+
+  ✅ Ep 97: Loss 0.0000 | 0.0s
+
+  ✅ Ep 98: Loss 0.0000 | 0.0s
+
+  ✅ Ep 99: Loss 0.0000 | 0.0s
+
+  ✅ Ep 100: Loss 0.0000 | 0.0s
+
+⏱ Total: 0.0s
+[1;32m💾 Saved at epoch 800 (970.0 MB)[0m
+
+🔄 Section 9/100, epochs 801-900
+
+🧠 TRUE KNOWLEDGE DISTILLATION
+   Epochs: 100
+   Samples: 300
+   📊 Architecture: gpt2
+   📊 Layers: 6, Hidden: 768, Vocab: 50257
+   ✅ 82 tensors loaded
+
+  ✅ Ep 1: Loss 0.0000 | 0.0s
+
+  ✅ Ep 2: Loss 0.0000 | 0.0s
+
+  ✅ Ep 3: Loss 0.0000 | 0.0s
+
+  ✅ Ep 4: Loss 0.0000 | 0.0s
+
+  ✅ Ep 5: Loss 0.0000 | 0.0s
+
+  ✅ Ep 6: Loss 0.0000 | 0.0s
+
+  ✅ Ep 7: Loss 0.0000 | 0.0s
+
+  ✅ Ep 8: Loss 0.0000 | 0.0s
+
+  ✅ Ep 9: Loss 0.0000 | 0.0s
+
+  ✅ Ep 10: Loss 0.0000 | 0.0s
+
+  ✅ Ep 11: Loss 0.0000 | 0.0s
+
+  ✅ Ep 12: Loss 0.0000 | 0.0s
+
+  ✅ Ep 13: Loss 0.0000 | 0.0s
+
+  ✅ Ep 14: Loss 0.0000 | 0.0s
+
+  ✅ Ep 15: Loss 0.0000 | 0.0s
+
+  ✅ Ep 16: Loss 0.0000 | 0.0s
+
+  ✅ Ep 17: Loss 0.0000 | 0.0s
+
+  ✅ Ep 18: Loss 0.0000 | 0.0s
+
+  ✅ Ep 19: Loss 0.0000 | 0.0s
+
+  ✅ Ep 20: Loss 0.0000 | 0.0s
+
+  ✅ Ep 21: Loss 0.0000 | 0.0s
+
+  ✅ Ep 22: Loss 0.0000 | 0.0s
+
+  ✅ Ep 23: Loss 0.0000 | 0.0s
+
+  ✅ Ep 24: Loss 0.0000 | 0.0s
+
+  ✅ Ep 25: Loss 0.0000 | 0.0s
+
+  ✅ Ep 26: Loss 0.0000 | 0.0s
+
+  ✅ Ep 27: Loss 0.0000 | 0.0s
+
+  ✅ Ep 28: Loss 0.0000 | 0.0s
+
+  ✅ Ep 29: Loss 0.0000 | 0.0s
+
+  ✅ Ep 30: Loss 0.0000 | 0.0s
+
+  ✅ Ep 31: Loss 0.0000 | 0.0s
+
+  ✅ Ep 32: Loss 0.0000 | 0.0s
+
+  ✅ Ep 33: Loss 0.0000 | 0.0s
+
+  ✅ Ep 34: Loss 0.0000 | 0.0s
+
+  ✅ Ep 35: Loss 0.0000 | 0.0s
+
+  ✅ Ep 36: Loss 0.0000 | 0.0s
+
+  ✅ Ep 37: Loss 0.0000 | 0.0s
+
+  ✅ Ep 38: Loss 0.0000 | 0.0s
+
+  ✅ Ep 39: Loss 0.0000 | 0.0s
+
+  ✅ Ep 40: Loss 0.0000 | 0.0s
+
+  ✅ Ep 41: Loss 0.0000 | 0.0s
+
+  ✅ Ep 42: Loss 0.0000 | 0.0s
+
+  ✅ Ep 43: Loss 0.0000 | 0.0s
+
+  ✅ Ep 44: Loss 0.0000 | 0.0s
+
+  ✅ Ep 45: Loss 0.0000 | 0.0s
+
+  ✅ Ep 46: Loss 0.0000 | 0.0s
+
+  ✅ Ep 47: Loss 0.0000 | 0.0s
+
+  ✅ Ep 48: Loss 0.0000 | 0.0s
+
+  ✅ Ep 49: Loss 0.0000 | 0.0s
+
+  ✅ Ep 50: Loss 0.0000 | 0.0s
+
+  ✅ Ep 51: Loss 0.0000 | 0.0s
+
+  ✅ Ep 52: Loss 0.0000 | 0.0s
+
+  ✅ Ep 53: Loss 0.0000 | 0.0s
+
+  ✅ Ep 54: Loss 0.0000 | 0.0s
+
+  ✅ Ep 55: Loss 0.0000 | 0.0s
+
+  ✅ Ep 56: Loss 0.0000 | 0.0s
+
+  ✅ Ep 57: Loss 0.0000 | 0.0s
+
+  ✅ Ep 58: Loss 0.0000 | 0.0s
+
+  ✅ Ep 59: Loss 0.0000 | 0.0s
+
+  ✅ Ep 60: Loss 0.0000 | 0.0s
+
+  ✅ Ep 61: Loss 0.0000 | 0.0s
+
+  ✅ Ep 62: Loss 0.0000 | 0.0s
+
+  ✅ Ep 63: Loss 0.0000 | 0.0s
+
+  ✅ Ep 64: Loss 0.0000 | 0.0s
+
+  ✅ Ep 65: Loss 0.0000 | 0.0s
+
+  ✅ Ep 66: Loss 0.0000 | 0.0s
+
+  ✅ Ep 67: Loss 0.0000 | 0.0s
+
+  ✅ Ep 68: Loss 0.0000 | 0.0s
+
+  ✅ Ep 69: Loss 0.0000 | 0.0s
+
+  ✅ Ep 70: Loss 0.0000 | 0.0s
+
+  ✅ Ep 71: Loss 0.0000 | 0.0s
+
+  ✅ Ep 72: Loss 0.0000 | 0.0s
+
+  ✅ Ep 73: Loss 0.0000 | 0.0s
+
+  ✅ Ep 74: Loss 0.0000 | 0.0s
+
+  ✅ Ep 75: Loss 0.0000 | 0.0s
+
+  ✅ Ep 76: Loss 0.0000 | 0.0s
+
+  ✅ Ep 77: Loss 0.0000 | 0.0s
+
+  ✅ Ep 78: Loss 0.0000 | 0.0s
+
+  ✅ Ep 79: Loss 0.0000 | 0.0s
+
+  ✅ Ep 80: Loss 0.0000 | 0.0s
+
+  ✅ Ep 81: Loss 0.0000 | 0.0s
+
+  ✅ Ep 82: Loss 0.0000 | 0.0s
+
+  ✅ Ep 83: Loss 0.0000 | 0.0s
+
+  ✅ Ep 84: Loss 0.0000 | 0.0s
+
+  ✅ Ep 85: Loss 0.0000 | 0.0s
+
+  ✅ Ep 86: Loss 0.0000 | 0.0s
+
+  ✅ Ep 87: Loss 0.0000 | 0.0s
+
+  ✅ Ep 88: Loss 0.0000 | 0.0s
+
+  ✅ Ep 89: Loss 0.0000 | 0.0s
+
+  ✅ Ep 90: Loss 0.0000 | 0.0s
+
+  ✅ Ep 91: Loss 0.0000 | 0.0s
+
+  ✅ Ep 92: Loss 0.0000 | 0.0s
+
+  ✅ Ep 93: Loss 0.0000 | 0.0s
+
+  ✅ Ep 94: Loss 0.0000 | 0.0s
+
+  ✅ Ep 95: Loss 0.0000 | 0.0s
+
+  ✅ Ep 96: Loss 0.0000 | 0.0s
+
+  ✅ Ep 97: Loss 0.0000 | 0.0s
+
+  ✅ Ep 98: Loss 0.0000 | 0.0s
+
+  ✅ Ep 99: Loss 0.0000 | 0.0s
+
+  ✅ Ep 100: Loss 0.0000 | 0.0s
+
+⏱ Total: 0.0s
+[1;32m💾 Saved at epoch 900 (970.0 MB)[0m
+
+🔄 Section 10/100, epochs 901-1000
+
+🧠 TRUE KNOWLEDGE DISTILLATION
+   Epochs: 100
+   Samples: 300
+   📊 Architecture: gpt2
+   📊 Layers: 6, Hidden: 768, Vocab: 50257
+   ✅ 82 tensors loaded
+
+  ✅ Ep 1: Loss 0.0000 | 0.0s
+
+  ✅ Ep 2: Loss 0.0000 | 0.0s
+
+  ✅ Ep 3: Loss 0.0000 | 0.0s
+
+  ✅ Ep 4: Loss 0.0000 | 0.0s
+
+  ✅ Ep 5: Loss 0.0000 | 0.0s
+
+  ✅ Ep 6: Loss 0.0000 | 0.0s
+
+  ✅ Ep 7: Loss 0.0000 | 0.0s
+
+  ✅ Ep 8: Loss 0.0000 | 0.0s
+
+  ✅ Ep 9: Loss 0.0000 | 0.0s
+
+  ✅ Ep 10: Loss 0.0000 | 0.0s
+
+  ✅ Ep 11: Loss 0.0000 | 0.0s
+
+  ✅ Ep 12: Loss 0.0000 | 0.0s
+
+  ✅ Ep 13: Loss 0.0000 | 0.0s
+
+  ✅ Ep 14: Loss 0.0000 | 0.0s
+
+  ✅ Ep 15: Loss 0.0000 | 0.0s
+
+  ✅ Ep 16: Loss 0.0000 | 0.0s
+
+  ✅ Ep 17: Loss 0.0000 | 0.0s
+
+  ✅ Ep 18: Loss 0.0000 | 0.0s
+
+  ✅ Ep 19: Loss 0.0000 | 0.0s
+
+  ✅ Ep 20: Loss 0.0000 | 0.0s
+
+  ✅ Ep 21: Loss 0.0000 | 0.0s
+
+  ✅ Ep 22: Loss 0.0000 | 0.0s
+
+  ✅ Ep 23: Loss 0.0000 | 0.0s
+
+  ✅ Ep 24: Loss 0.0000 | 0.0s
+
+  ✅ Ep 25: Loss 0.0000 | 0.0s
+
+  ✅ Ep 26: Loss 0.0000 | 0.0s
+
+  ✅ Ep 27: Loss 0.0000 | 0.0s
+
+  ✅ Ep 28: Loss 0.0000 | 0.0s
+
+  ✅ Ep 29: Loss 0.0000 | 0.0s
+
+  ✅ Ep 30: Loss 0.0000 | 0.0s
+
+  ✅ Ep 31: Loss 0.0000 | 0.0s
+
+  ✅ Ep 32: Loss 0.0000 | 0.0s
+
+  ✅ Ep 33: Loss 0.0000 | 0.0s
+
+  ✅ Ep 34: Loss 0.0000 | 0.0s
+
+  ✅ Ep 35: Loss 0.0000 | 0.0s
+
+  ✅ Ep 36: Loss 0.0000 | 0.0s
+
+  ✅ Ep 37: Loss 0.0000 | 0.0s
+
+  ✅ Ep 38: Loss 0.0000 | 0.0s
+
+  ✅ Ep 39: Loss 0.0000 | 0.0s
+
+  ✅ Ep 40: Loss 0.0000 | 0.0s
+
+  ✅ Ep 41: Loss 0.0000 | 0.0s
+
+  ✅ Ep 42: Loss 0.0000 | 0.0s
+
+  ✅ Ep 43: Loss 0.0000 | 0.0s
+
+  ✅ Ep 44: Loss 0.0000 | 0.0s
+
+  ✅ Ep 45: Loss 0.0000 | 0.0s
+
+  ✅ Ep 46: Loss 0.0000 | 0.0s
+
+  ✅ Ep 47: Loss 0.0000 | 0.0s
+
+  ✅ Ep 48: Loss 0.0000 | 0.0s
+
+  ✅ Ep 49: Loss 0.0000 | 0.0s
+
+  ✅ Ep 50: Loss 0.0000 | 0.0s
+
+  ✅ Ep 51: Loss 0.0000 | 0.0s
+
+  ✅ Ep 52: Loss 0.0000 | 0.0s
+
+  ✅ Ep 53: Loss 0.0000 | 0.0s
+
+  ✅ Ep 54: Loss 0.0000 | 0.0s
+
+  ✅ Ep 55: Loss 0.0000 | 0.0s
+
+  ✅ Ep 56: Loss 0.0000 | 0.0s
+
+  ✅ Ep 57: Loss 0.0000 | 0.0s
+
+  ✅ Ep 58: Loss 0.0000 | 0.0s
+
+  ✅ Ep 59: Loss 0.0000 | 0.0s
+
+  ✅ Ep 60: Loss 0.0000 | 0.0s
+
+  ✅ Ep 61: Loss 0.0000 | 0.0s
+
+  ✅ Ep 62: Loss 0.0000 | 0.0s
+
+  ✅ Ep 63: Loss 0.0000 | 0.0s
+
+  ✅ Ep 64: Loss 0.0000 | 0.0s
+
+  ✅ Ep 65: Loss 0.0000 | 0.0s
+
+  ✅ Ep 66: Loss 0.0000 | 0.0s
+
+  ✅ Ep 67: Loss 0.0000 | 0.0s
+
+  ✅ Ep 68: Loss 0.0000 | 0.0s
+
+  ✅ Ep 69: Loss 0.0000 | 0.0s
+
+  ✅ Ep 70: Loss 0.0000 | 0.0s
+
+  ✅ Ep 71: Loss 0.0000 | 0.0s
+
+  ✅ Ep 72: Loss 0.0000 | 0.0s
+
+  ✅ Ep 73: Loss 0.0000 | 0.0s
+
+  ✅ Ep 74: Loss 0.0000 | 0.0s
+
+  ✅ Ep 75: Loss 0.0000 | 0.0s
+
+  ✅ Ep 76: Loss 0.0000 | 0.0s
+
+  ✅ Ep 77: Loss 0.0000 | 0.0s
+
+  ✅ Ep 78: Loss 0.0000 | 0.0s
+
+  ✅ Ep 79: Loss 0.0000 | 0.0s
+
+  ✅ Ep 80: Loss 0.0000 | 0.0s
+
+  ✅ Ep 81: Loss 0.0000 | 0.0s
+
+  ✅ Ep 82: Loss 0.0000 | 0.0s
+
+  ✅ Ep 83: Loss 0.0000 | 0.0s
+
+  ✅ Ep 84: Loss 0.0000 | 0.0s
+
+  ✅ Ep 85: Loss 0.0000 | 0.0s
+
+  ✅ Ep 86: Loss 0.0000 | 0.0s
+
+  ✅ Ep 87: Loss 0.0000 | 0.0s
+
+  ✅ Ep 88: Loss 0.0000 | 0.0s
+
+  ✅ Ep 89: Loss 0.0000 | 0.0s
+
+  ✅ Ep 90: Loss 0.0000 | 0.0s
+
+  ✅ Ep 91: Loss 0.0000 | 0.0s
+
+  ✅ Ep 92: Loss 0.0000 | 0.0s
+
+  ✅ Ep 93: Loss 0.0000 | 0.0s
+
+  ✅ Ep 94: Loss 0.0000 | 0.0s
+
+  ✅ Ep 95: Loss 0.0000 | 0.0s
+
+  ✅ Ep 96: Loss 0.0000 | 0.0s
+
+  ✅ Ep 97: Loss 0.0000 | 0.0s
+
+  ✅ Ep 98: Loss 0.0000 | 0.0s
+
+  ✅ Ep 99: Loss 0.0000 | 0.0s
+
+  ✅ Ep 100: Loss 0.0000 | 0.0s
+
+⏱ Total: 0.0s
+[1;32m💾 Saved at epoch 1000 (970.0 MB)[0m
+
+🔄 Section 11/100, epochs 1001-1100
+
+🧠 TRUE KNOWLEDGE DISTILLATION
+   Epochs: 100
+   Samples: 300
+   📊 Architecture: gpt2
+   📊 Layers: 6, Hidden: 768, Vocab: 50257
+   ✅ 82 tensors loaded
+
+  ✅ Ep 1: Loss 0.0000 | 0.0s
+
+  ✅ Ep 2: Loss 0.0000 | 0.0s
+
+  ✅ Ep 3: Loss 0.0000 | 0.0s
+
+  ✅ Ep 4: Loss 0.0000 | 0.0s
+
+  ✅ Ep 5: Loss 0.0000 | 0.0s
+
+  ✅ Ep 6: Loss 0.0000 | 0.0s
+
+  ✅ Ep 7: Loss 0.0000 | 0.0s
+
+  ✅ Ep 8: Loss 0.0000 | 0.0s
+
+  ✅ Ep 9: Loss 0.0000 | 0.0s
+
+  ✅ Ep 10: Loss 0.0000 | 0.0s
+
+  ✅ Ep 11: Loss 0.0000 | 0.0s
+
+  ✅ Ep 12: Loss 0.0000 | 0.0s
+
+  ✅ Ep 13: Loss 0.0000 | 0.0s
+
+  ✅ Ep 14: Loss 0.0000 | 0.0s
+
+  ✅ Ep 15: Loss 0.0000 | 0.0s
+
+  ✅ Ep 16: Loss 0.0000 | 0.0s
+
+  ✅ Ep 17: Loss 0.0000 | 0.0s
+
+  ✅ Ep 18: Loss 0.0000 | 0.0s
+
+  ✅ Ep 19: Loss 0.0000 | 0.0s
+
+  ✅ Ep 20: Loss 0.0000 | 0.0s
+
+  ✅ Ep 21: Loss 0.0000 | 0.0s
+
+  ✅ Ep 22: Loss 0.0000 | 0.0s
+
+  ✅ Ep 23: Loss 0.0000 | 0.0s
+
+  ✅ Ep 24: Loss 0.0000 | 0.0s
+
+  ✅ Ep 25: Loss 0.0000 | 0.0s
+
+  ✅ Ep 26: Loss 0.0000 | 0.0s
+
+  ✅ Ep 27: Loss 0.0000 | 0.0s
+
+  ✅ Ep 28: Loss 0.0000 | 0.0s
+
+  ✅ Ep 29: Loss 0.0000 | 0.0s
+
+  ✅ Ep 30: Loss 0.0000 | 0.0s
+
+  ✅ Ep 31: Loss 0.0000 | 0.0s
+
+  ✅ Ep 32: Loss 0.0000 | 0.0s
+
+  ✅ Ep 33: Loss 0.0000 | 0.0s
+
+  ✅ Ep 34: Loss 0.0000 | 0.0s
+
+  ✅ Ep 35: Loss 0.0000 | 0.0s
+
+  ✅ Ep 36: Loss 0.0000 | 0.0s
+
+  ✅ Ep 37: Loss 0.0000 | 0.0s
+
+  ✅ Ep 38: Loss 0.0000 | 0.0s
+
+  ✅ Ep 39: Loss 0.0000 | 0.0s
+
+  ✅ Ep 40: Loss 0.0000 | 0.0s
+
+  ✅ Ep 41: Loss 0.0000 | 0.0s
+
+  ✅ Ep 42: Loss 0.0000 | 0.0s
+
+  ✅ Ep 43: Loss 0.0000 | 0.0s
+
+  ✅ Ep 44: Loss 0.0000 | 0.0s
+
+  ✅ Ep 45: Loss 0.0000 | 0.0s
+
+  ✅ Ep 46: Loss 0.0000 | 0.0s
+
+  ✅ Ep 47: Loss 0.0000 | 0.0s
+
+  ✅ Ep 48: Loss 0.0000 | 0.0s
+
+  ✅ Ep 49: Loss 0.0000 | 0.0s
+
+  ✅ Ep 50: Loss 0.0000 | 0.0s
+
+  ✅ Ep 51: Loss 0.0000 | 0.0s
+
+  ✅ Ep 52: Loss 0.0000 | 0.0s
+
+  ✅ Ep 53: Loss 0.0000 | 0.0s
+
+  ✅ Ep 54: Loss 0.0000 | 0.0s
+
+  ✅ Ep 55: Loss 0.0000 | 0.0s
+
+  ✅ Ep 56: Loss 0.0000 | 0.0s
+
+  ✅ Ep 57: Loss 0.0000 | 0.0s
+
+  ✅ Ep 58: Loss 0.0000 | 0.0s
+
+  ✅ Ep 59: Loss 0.0000 | 0.0s
+
+  ✅ Ep 60: Loss 0.0000 | 0.0s
+
+  ✅ Ep 61: Loss 0.0000 | 0.0s
+
+  ✅ Ep 62: Loss 0.0000 | 0.0s
+
+  ✅ Ep 63: Loss 0.0000 | 0.0s
+
+  ✅ Ep 64: Loss 0.0000 | 0.0s
+
+  ✅ Ep 65: Loss 0.0000 | 0.0s
+
+  ✅ Ep 66: Loss 0.0000 | 0.0s
+
+  ✅ Ep 67: Loss 0.0000 | 0.0s
+
+  ✅ Ep 68: Loss 0.0000 | 0.0s
+
+  ✅ Ep 69: Loss 0.0000 | 0.0s
+
+  ✅ Ep 70: Loss 0.0000 | 0.0s
+
+  ✅ Ep 71: Loss 0.0000 | 0.0s
+
+  ✅ Ep 72: Loss 0.0000 | 0.0s
+
+  ✅ Ep 73: Loss 0.0000 | 0.0s
+
+  ✅ Ep 74: Loss 0.0000 | 0.0s
+
+  ✅ Ep 75: Loss 0.0000 | 0.0s
+
+  ✅ Ep 76: Loss 0.0000 | 0.0s
+
+  ✅ Ep 77: Loss 0.0000 | 0.0s
+
+  ✅ Ep 78: Loss 0.0000 | 0.0s
+
+  ✅ Ep 79: Loss 0.0000 | 0.0s
+
+  ✅ Ep 80: Loss 0.0000 | 0.0s
+
+  ✅ Ep 81: Loss 0.0000 | 0.0s
+
+  ✅ Ep 82: Loss 0.0000 | 0.0s
+
+  ✅ Ep 83: Loss 0.0000 | 0.0s
+
+  ✅ Ep 84: Loss 0.0000 | 0.0s
+
+  ✅ Ep 85: Loss 0.0000 | 0.0s
+
+  ✅ Ep 86: Loss 0.0000 | 0.0s
+
+  ✅ Ep 87: Loss 0.0000 | 0.0s
+
+  ✅ Ep 88: Loss 0.0000 | 0.0s
+
+  ✅ Ep 89: Loss 0.0000 | 0.0s
+
+  ✅ Ep 90: Loss 0.0000 | 0.0s
+
+  ✅ Ep 91: Loss 0.0000 | 0.0s
+
+  ✅ Ep 92: Loss 0.0000 | 0.0s
+
+  ✅ Ep 93: Loss 0.0000 | 0.0s
+
+  ✅ Ep 94: Loss 0.0000 | 0.0s
+
+  ✅ Ep 95: Loss 0.0000 | 0.0s
+
+  ✅ Ep 96: Loss 0.0000 | 0.0s
+
+  ✅ Ep 97: Loss 0.0000 | 0.0s
+
+  ✅ Ep 98: Loss 0.0000 | 0.0s
+
+  ✅ Ep 99: Loss 0.0000 | 0.0s
+
+  ✅ Ep 100: Loss 0.0000 | 0.0s
+
+⏱ Total: 0.0s
+[1;32m💾 Saved at epoch 1100 (970.0 MB)[0m
+
+🔄 Section 12/100, epochs 1101-1200
+
+🧠 TRUE KNOWLEDGE DISTILLATION
+   Epochs: 100
+   Samples: 300
+   📊 Architecture: gpt2
+   📊 Layers: 6, Hidden: 768, Vocab: 50257
+   ✅ 82 tensors loaded
+
+  ✅ Ep 1: Loss 0.0000 | 0.0s
+
+  ✅ Ep 2: Loss 0.0000 | 0.0s
+
+  ✅ Ep 3: Loss 0.0000 | 0.0s
+
+  ✅ Ep 4: Loss 0.0000 | 0.0s
+
+  ✅ Ep 5: Loss 0.0000 | 0.0s
+
+  ✅ Ep 6: Loss 0.0000 | 0.0s
+
+  ✅ Ep 7: Loss 0.0000 | 0.0s
+
+  ✅ Ep 8: Loss 0.0000 | 0.0s
+
+  ✅ Ep 9: Loss 0.0000 | 0.0s
+
+  ✅ Ep 10: Loss 0.0000 | 0.0s
+
+  ✅ Ep 11: Loss 0.0000 | 0.0s
+
+  ✅ Ep 12: Loss 0.0000 | 0.0s
+
+  ✅ Ep 13: Loss 0.0000 | 0.0s
+
+  ✅ Ep 14: Loss 0.0000 | 0.0s
+
+  ✅ Ep 15: Loss 0.0000 | 0.0s
+
+  ✅ Ep 16: Loss 0.0000 | 0.0s
+
+  ✅ Ep 17: Loss 0.0000 | 0.0s
+
+  ✅ Ep 18: Loss 0.0000 | 0.0s
+
+  ✅ Ep 19: Loss 0.0000 | 0.0s
+
+  ✅ Ep 20: Loss 0.0000 | 0.0s
+
+  ✅ Ep 21: Loss 0.0000 | 0.0s
+
+  ✅ Ep 22: Loss 0.0000 | 0.0s
+
+  ✅ Ep 23: Loss 0.0000 | 0.0s
+
+  ✅ Ep 24: Loss 0.0000 | 0.0s
+
+  ✅ Ep 25: Loss 0.0000 | 0.0s
+
+  ✅ Ep 26: Loss 0.0000 | 0.0s
+
+  ✅ Ep 27: Loss 0.0000 | 0.0s
+
+  ✅ Ep 28: Loss 0.0000 | 0.0s
+
+  ✅ Ep 29: Loss 0.0000 | 0.0s
+
+  ✅ Ep 30: Loss 0.0000 | 0.0s
+
+  ✅ Ep 31: Loss 0.0000 | 0.0s
+
+  ✅ Ep 32: Loss 0.0000 | 0.0s
+
+  ✅ Ep 33: Loss 0.0000 | 0.0s
+
+  ✅ Ep 34: Loss 0.0000 | 0.0s
+
+  ✅ Ep 35: Loss 0.0000 | 0.0s
+
+  ✅ Ep 36: Loss 0.0000 | 0.0s
+
+  ✅ Ep 37: Loss 0.0000 | 0.0s
+
+  ✅ Ep 38: Loss 0.0000 | 0.0s
+
+  ✅ Ep 39: Loss 0.0000 | 0.0s
+
+  ✅ Ep 40: Loss 0.0000 | 0.0s
+
+  ✅ Ep 41: Loss 0.0000 | 0.0s
+
+  ✅ Ep 42: Loss 0.0000 | 0.0s
+
+  ✅ Ep 43: Loss 0.0000 | 0.0s
+
+  ✅ Ep 44: Loss 0.0000 | 0.0s
+
+  ✅ Ep 45: Loss 0.0000 | 0.0s
+
+  ✅ Ep 46: Loss 0.0000 | 0.0s
+
+  ✅ Ep 47: Loss 0.0000 | 0.0s
+
+  ✅ Ep 48: Loss 0.0000 | 0.0s
+
+  ✅ Ep 49: Loss 0.0000 | 0.0s
+
+  ✅ Ep 50: Loss 0.0000 | 0.0s
+
+  ✅ Ep 51: Loss 0.0000 | 0.0s
+
+  ✅ Ep 52: Loss 0.0000 | 0.0s
+
+  ✅ Ep 53: Loss 0.0000 | 0.0s
+
+  ✅ Ep 54: Loss 0.0000 | 0.0s
+
+  ✅ Ep 55: Loss 0.0000 | 0.0s
+
+  ✅ Ep 56: Loss 0.0000 | 0.0s
+
+  ✅ Ep 57: Loss 0.0000 | 0.0s
+
+  ✅ Ep 58: Loss 0.0000 | 0.0s
+
+  ✅ Ep 59: Loss 0.0000 | 0.0s
+
+  ✅ Ep 60: Loss 0.0000 | 0.0s
+
+  ✅ Ep 61: Loss 0.0000 | 0.0s
+
+  ✅ Ep 62: Loss 0.0000 | 0.0s
+
+  ✅ Ep 63: Loss 0.0000 | 0.0s
+
+  ✅ Ep 64: Loss 0.0000 | 0.0s
+
+  ✅ Ep 65: Loss 0.0000 | 0.0s
+
+  ✅ Ep 66: Loss 0.0000 | 0.0s
+
+  ✅ Ep 67: Loss 0.0000 | 0.0s
+
+  ✅ Ep 68: Loss 0.0000 | 0.0s
+
+  ✅ Ep 69: Loss 0.0000 | 0.0s
+
+  ✅ Ep 70: Loss 0.0000 | 0.0s
+
+  ✅ Ep 71: Loss 0.0000 | 0.0s
+
+  ✅ Ep 72: Loss 0.0000 | 0.0s
+
+  ✅ Ep 73: Loss 0.0000 | 0.0s
+
+  ✅ Ep 74: Loss 0.0000 | 0.0s
+
+  ✅ Ep 75: Loss 0.0000 | 0.0s
+
+  ✅ Ep 76: Loss 0.0000 | 0.0s
+
+  ✅ Ep 77: Loss 0.0000 | 0.0s
+
+  ✅ Ep 78: Loss 0.0000 | 0.0s
+
+  ✅ Ep 79: Loss 0.0000 | 0.0s
+
+  ✅ Ep 80: Loss 0.0000 | 0.0s
+
+  ✅ Ep 81: Loss 0.0000 | 0.0s
+
+  ✅ Ep 82: Loss 0.0000 | 0.0s
+
+  ✅ Ep 83: Loss 0.0000 | 0.0s
+
+  ✅ Ep 84: Loss 0.0000 | 0.0s
+
+  ✅ Ep 85: Loss 0.0000 | 0.0s
+
+  ✅ Ep 86: Loss 0.0000 | 0.0s
+
+  ✅ Ep 87: Loss 0.0000 | 0.0s
+
+  ✅ Ep 88: Loss 0.0000 | 0.0s
+
+  ✅ Ep 89: Loss 0.0000 | 0.0s
+
+  ✅ Ep 90: Loss 0.0000 | 0.0s
+
+  ✅ Ep 91: Loss 0.0000 | 0.0s
+
+  ✅ Ep 92: Loss 0.0000 | 0.0s
+
+  ✅ Ep 93: Loss 0.0000 | 0.0s
+
+  ✅ Ep 94: Loss 0.0000 | 0.0s
+
+  ✅ Ep 95: Loss 0.0000 | 0.0s
+
+  ✅ Ep 96: Loss 0.0000 | 0.0s
+
+  ✅ Ep 97: Loss 0.0000 | 0.0s
+
+  ✅ Ep 98: Loss 0.0000 | 0.0s
+
+  ✅ Ep 99: Loss 0.0000 | 0.0s
+
+  ✅ Ep 100: Loss 0.0000 | 0.0s
+
+⏱ Total: 0.0s
+[1;32m💾 Saved at epoch 1200 (970.0 MB)[0m
+
+🔄 Section 13/100, epochs 1201-1300
+
+🧠 TRUE KNOWLEDGE DISTILLATION
+   Epochs: 100
+   Samples: 300
+   📊 Architecture: gpt2
+   📊 Layers: 6, Hidden: 768, Vocab: 50257
+   ✅ 82 tensors loaded
+
+  ✅ Ep 1: Loss 0.0000 | 0.0s
+
+  ✅ Ep 2: Loss 0.0000 | 0.0s
+
+  ✅ Ep 3: Loss 0.0000 | 0.0s
+
+  ✅ Ep 4: Loss 0.0000 | 0.0s
+
+  ✅ Ep 5: Loss 0.0000 | 0.0s
+
+  ✅ Ep 6: Loss 0.0000 | 0.0s
+
+  ✅ Ep 7: Loss 0.0000 | 0.0s
+
+  ✅ Ep 8: Loss 0.0000 | 0.0s
+
+  ✅ Ep 9: Loss 0.0000 | 0.0s
+
+  ✅ Ep 10: Loss 0.0000 | 0.0s
+
+  ✅ Ep 11: Loss 0.0000 | 0.0s
+
+  ✅ Ep 12: Loss 0.0000 | 0.0s
+
+  ✅ Ep 13: Loss 0.0000 | 0.0s
+
+  ✅ Ep 14: Loss 0.0000 | 0.0s
+
+  ✅ Ep 15: Loss 0.0000 | 0.0s
+
+  ✅ Ep 16: Loss 0.0000 | 0.0s
+
+  ✅ Ep 17: Loss 0.0000 | 0.0s
+
+  ✅ Ep 18: Loss 0.0000 | 0.0s
+
+  ✅ Ep 19: Loss 0.0000 | 0.0s
+
+  ✅ Ep 20: Loss 0.0000 | 0.0s
+
+  ✅ Ep 21: Loss 0.0000 | 0.0s
+
+  ✅ Ep 22: Loss 0.0000 | 0.0s
+
+  ✅ Ep 23: Loss 0.0000 | 0.0s
+
+  ✅ Ep 24: Loss 0.0000 | 0.0s
+
+  ✅ Ep 25: Loss 0.0000 | 0.0s
+
+  ✅ Ep 26: Loss 0.0000 | 0.0s
+
+  ✅ Ep 27: Loss 0.0000 | 0.0s
+
+  ✅ Ep 28: Loss 0.0000 | 0.0s
+
+  ✅ Ep 29: Loss 0.0000 | 0.0s
+
+  ✅ Ep 30: Loss 0.0000 | 0.0s
+
+  ✅ Ep 31: Loss 0.0000 | 0.0s
+
+  ✅ Ep 32: Loss 0.0000 | 0.0s
+
+  ✅ Ep 33: Loss 0.0000 | 0.0s
+
+  ✅ Ep 34: Loss 0.0000 | 0.0s
+
+  ✅ Ep 35: Loss 0.0000 | 0.0s
+
+  ✅ Ep 36: Loss 0.0000 | 0.0s
+
+  ✅ Ep 37: Loss 0.0000 | 0.0s
+
+  ✅ Ep 38: Loss 0.0000 | 0.0s
+
+  ✅ Ep 39: Loss 0.0000 | 0.0s
+
+  ✅ Ep 40: Loss 0.0000 | 0.0s
+
+  ✅ Ep 41: Loss 0.0000 | 0.0s
+
+  ✅ Ep 42: Loss 0.0000 | 0.0s
+
+  ✅ Ep 43: Loss 0.0000 | 0.0s
+
+  ✅ Ep 44: Loss 0.0000 | 0.0s
+
+  ✅ Ep 45: Loss 0.0000 | 0.0s
+
+  ✅ Ep 46: Loss 0.0000 | 0.0s
+
+  ✅ Ep 47: Loss 0.0000 | 0.0s
+
+  ✅ Ep 48: Loss 0.0000 | 0.0s
+
+  ✅ Ep 49: Loss 0.0000 | 0.0s
+
+  ✅ Ep 50: Loss 0.0000 | 0.0s
+
+  ✅ Ep 51: Loss 0.0000 | 0.0s
+
+  ✅ Ep 52: Loss 0.0000 | 0.0s
+
+  ✅ Ep 53: Loss 0.0000 | 0.0s
+
+  ✅ Ep 54: Loss 0.0000 | 0.0s
+
+  ✅ Ep 55: Loss 0.0000 | 0.0s
+
+  ✅ Ep 56: Loss 0.0000 | 0.0s
+
+  ✅ Ep 57: Loss 0.0000 | 0.0s
+
+  ✅ Ep 58: Loss 0.0000 | 0.0s
+
+  ✅ Ep 59: Loss 0.0000 | 0.0s
+
+  ✅ Ep 60: Loss 0.0000 | 0.0s
+
+  ✅ Ep 61: Loss 0.0000 | 0.0s
+
+  ✅ Ep 62: Loss 0.0000 | 0.0s
+
+  ✅ Ep 63: Loss 0.0000 | 0.0s
+
+  ✅ Ep 64: Loss 0.0000 | 0.0s
+
+  ✅ Ep 65: Loss 0.0000 | 0.0s
+
+  ✅ Ep 66: Loss 0.0000 | 0.0s
+
+  ✅ Ep 67: Loss 0.0000 | 0.0s
+
+  ✅ Ep 68: Loss 0.0000 | 0.0s
+
+  ✅ Ep 69: Loss 0.0000 | 0.0s
+
+  ✅ Ep 70: Loss 0.0000 | 0.0s
+
+  ✅ Ep 71: Loss 0.0000 | 0.0s
+
+  ✅ Ep 72: Loss 0.0000 | 0.0s
+
+  ✅ Ep 73: Loss 0.0000 | 0.0s
+
+  ✅ Ep 74: Loss 0.0000 | 0.0s
+
+  ✅ Ep 75: Loss 0.0000 | 0.0s
+
+  ✅ Ep 76: Loss 0.0000 | 0.0s
+
+  ✅ Ep 77: Loss 0.0000 | 0.0s
+
+  ✅ Ep 78: Loss 0.0000 | 0.0s
+
+  ✅ Ep 79: Loss 0.0000 | 0.0s
+
+  ✅ Ep 80: Loss 0.0000 | 0.0s
+
+  ✅ Ep 81: Loss 0.0000 | 0.0s
+
+  ✅ Ep 82: Loss 0.0000 | 0.0s
+
+  ✅ Ep 83: Loss 0.0000 | 0.0s
+
+  ✅ Ep 84: Loss 0.0000 | 0.0s
+
+  ✅ Ep 85: Loss 0.0000 | 0.0s
+
+  ✅ Ep 86: Loss 0.0000 | 0.0s
+
+  ✅ Ep 87: Loss 0.0000 | 0.0s
+
+  ✅ Ep 88: Loss 0.0000 | 0.0s
+
+  ✅ Ep 89: Loss 0.0000 | 0.0s
+
+  ✅ Ep 90: Loss 0.0000 | 0.0s
+
+  ✅ Ep 91: Loss 0.0000 | 0.0s
+
+  ✅ Ep 92: Loss 0.0000 | 0.0s
+
+  ✅ Ep 93: Loss 0.0000 | 0.0s
+
+  ✅ Ep 94: Loss 0.0000 | 0.0s
+
+  ✅ Ep 95: Loss 0.0000 | 0.0s
+
+  ✅ Ep 96: Loss 0.0000 | 0.0s
+
+  ✅ Ep 97: Loss 0.0000 | 0.0s
+
+  ✅ Ep 98: Loss 0.0000 | 0.0s
+
+  ✅ Ep 99: Loss 0.0000 | 0.0s
+
+  ✅ Ep 100: Loss 0.0000 | 0.0s
+
+⏱ Total: 0.0s
+[1;32m💾 Saved at epoch 1300 (970.0 MB)[0m
+
+🔄 Section 14/100, epochs 1301-1400
+
+🧠 TRUE KNOWLEDGE DISTILLATION
+   Epochs: 100
+   Samples: 300
+   📊 Architecture: gpt2
+   📊 Layers: 6, Hidden: 768, Vocab: 50257
+   ✅ 82 tensors loaded
+
+  ✅ Ep 1: Loss 0.0000 | 0.0s
+
+  ✅ Ep 2: Loss 0.0000 | 0.0s
+
+  ✅ Ep 3: Loss 0.0000 | 0.0s
+
+  ✅ Ep 4: Loss 0.0000 | 0.0s
+
+  ✅ Ep 5: Loss 0.0000 | 0.0s
+
+  ✅ Ep 6: Loss 0.0000 | 0.0s
+
+  ✅ Ep 7: Loss 0.0000 | 0.0s
+
+  ✅ Ep 8: Loss 0.0000 | 0.0s
+
+  ✅ Ep 9: Loss 0.0000 | 0.0s
+
+  ✅ Ep 10: Loss 0.0000 | 0.0s
+
+  ✅ Ep 11: Loss 0.0000 | 0.0s
+
+  ✅ Ep 12: Loss 0.0000 | 0.0s
+
+  ✅ Ep 13: Loss 0.0000 | 0.0s
+
+  ✅ Ep 14: Loss 0.0000 | 0.0s
+
+  ✅ Ep 15: Loss 0.0000 | 0.0s
+
+  ✅ Ep 16: Loss 0.0000 | 0.0s
+
+  ✅ Ep 17: Loss 0.0000 | 0.0s
+
+  ✅ Ep 18: Loss 0.0000 | 0.0s
+
+  ✅ Ep 19: Loss 0.0000 | 0.0s
+
+  ✅ Ep 20: Loss 0.0000 | 0.0s
+
+  ✅ Ep 21: Loss 0.0000 | 0.0s
+
+  ✅ Ep 22: Loss 0.0000 | 0.0s
+
+  ✅ Ep 23: Loss 0.0000 | 0.0s
+
+  ✅ Ep 24: Loss 0.0000 | 0.0s
+
+  ✅ Ep 25: Loss 0.0000 | 0.0s
+
+  ✅ Ep 26: Loss 0.0000 | 0.0s
+
+  ✅ Ep 27: Loss 0.0000 | 0.0s
+
+  ✅ Ep 28: Loss 0.0000 | 0.0s
+
+  ✅ Ep 29: Loss 0.0000 | 0.0s
+
+  ✅ Ep 30: Loss 0.0000 | 0.0s
+
+  ✅ Ep 31: Loss 0.0000 | 0.0s
+
+  ✅ Ep 32: Loss 0.0000 | 0.0s
+
+  ✅ Ep 33: Loss 0.0000 | 0.0s
+
+  ✅ Ep 34: Loss 0.0000 | 0.0s
+
+  ✅ Ep 35: Loss 0.0000 | 0.0s
+
+  ✅ Ep 36: Loss 0.0000 | 0.0s
+
+  ✅ Ep 37: Loss 0.0000 | 0.0s
+
+  ✅ Ep 38: Loss 0.0000 | 0.0s
+
+  ✅ Ep 39: Loss 0.0000 | 0.0s
+
+  ✅ Ep 40: Loss 0.0000 | 0.0s
+
+  ✅ Ep 41: Loss 0.0000 | 0.0s
+
+  ✅ Ep 42: Loss 0.0000 | 0.0s
+
+  ✅ Ep 43: Loss 0.0000 | 0.0s
+
+  ✅ Ep 44: Loss 0.0000 | 0.0s
+
+  ✅ Ep 45: Loss 0.0000 | 0.0s
+
+  ✅ Ep 46: Loss 0.0000 | 0.0s
+
+  ✅ Ep 47: Loss 0.0000 | 0.0s
+
+  ✅ Ep 48: Loss 0.0000 | 0.0s
+
+  ✅ Ep 49: Loss 0.0000 | 0.0s
+
+  ✅ Ep 50: Loss 0.0000 | 0.0s
+
+  ✅ Ep 51: Loss 0.0000 | 0.0s
+
+  ✅ Ep 52: Loss 0.0000 | 0.0s
+
+  ✅ Ep 53: Loss 0.0000 | 0.0s
+
+  ✅ Ep 54: Loss 0.0000 | 0.0s
+
+  ✅ Ep 55: Loss 0.0000 | 0.0s
+
+  ✅ Ep 56: Loss 0.0000 | 0.0s
+
+  ✅ Ep 57: Loss 0.0000 | 0.0s
+
+  ✅ Ep 58: Loss 0.0000 | 0.0s
+
+  ✅ Ep 59: Loss 0.0000 | 0.0s
+
+  ✅ Ep 60: Loss 0.0000 | 0.0s
+
+  ✅ Ep 61: Loss 0.0000 | 0.0s
+
+  ✅ Ep 62: Loss 0.0000 | 0.0s
+
+  ✅ Ep 63: Loss 0.0000 | 0.0s
+
+  ✅ Ep 64: Loss 0.0000 | 0.0s
+
+  ✅ Ep 65: Loss 0.0000 | 0.0s
+
+  ✅ Ep 66: Loss 0.0000 | 0.0s
+
+  ✅ Ep 67: Loss 0.0000 | 0.0s
+
+  ✅ Ep 68: Loss 0.0000 | 0.0s
+
+  ✅ Ep 69: Loss 0.0000 | 0.0s
+
+  ✅ Ep 70: Loss 0.0000 | 0.0s
+
+  ✅ Ep 71: Loss 0.0000 | 0.0s
+
+  ✅ Ep 72: Loss 0.0000 | 0.0s
+
+  ✅ Ep 73: Loss 0.0000 | 0.0s
+
+  ✅ Ep 74: Loss 0.0000 | 0.0s
+
+  ✅ Ep 75: Loss 0.0000 | 0.0s
+
+  ✅ Ep 76: Loss 0.0000 | 0.0s
+
+  ✅ Ep 77: Loss 0.0000 | 0.0s
+
+  ✅ Ep 78: Loss 0.0000 | 0.0s
+
+  ✅ Ep 79: Loss 0.0000 | 0.0s
+
+  ✅ Ep 80: Loss 0.0000 | 0.0s
+
+  ✅ Ep 81: Loss 0.0000 | 0.0s
+
+  ✅ Ep 82: Loss 0.0000 | 0.0s
+
+  ✅ Ep 83: Loss 0.0000 | 0.0s
+
+  ✅ Ep 84: Loss 0.0000 | 0.0s
+
+  ✅ Ep 85: Loss 0.0000 | 0.0s
+
+  ✅ Ep 86: Loss 0.0000 | 0.0s
+
+  ✅ Ep 87: Loss 0.0000 | 0.0s
+
+  ✅ Ep 88: Loss 0.0000 | 0.0s
+
+  ✅ Ep 89: Loss 0.0000 | 0.0s
+
+  ✅ Ep 90: Loss 0.0000 | 0.0s
+
+  ✅ Ep 91: Loss 0.0000 | 0.0s
+
+  ✅ Ep 92: Loss 0.0000 | 0.0s
+
+  ✅ Ep 93: Loss 0.0000 | 0.0s
+
+  ✅ Ep 94: Loss 0.0000 | 0.0s
+
+  ✅ Ep 95: Loss 0.0000 | 0.0s
+
+  ✅ Ep 96: Loss 0.0000 | 0.0s
+
+  ✅ Ep 97: Loss 0.0000 | 0.0s
+
+  ✅ Ep 98: Loss 0.0000 | 0.0s
+
+  ✅ Ep 99: Loss 0.0000 | 0.0s
+
+  ✅ Ep 100: Loss 0.0000 | 0.0s
+
+⏱ Total: 0.0s
+[1;32m💾 Saved at epoch 1400 (970.0 MB)[0m
+
+🔄 Section 15/100, epochs 1401-1500
+
+🧠 TRUE KNOWLEDGE DISTILLATION
+   Epochs: 100
+   Samples: 300
+   📊 Architecture: gpt2
+   📊 Layers: 6, Hidden: 768, Vocab: 50257
+   ✅ 82 tensors loaded
+
+  ✅ Ep 1: Loss 0.0000 | 0.0s
+
+  ✅ Ep 2: Loss 0.0000 | 0.0s
+
+  ✅ Ep 3: Loss 0.0000 | 0.0s
+
+  ✅ Ep 4: Loss 0.0000 | 0.0s
+
+  ✅ Ep 5: Loss 0.0000 | 0.0s
+
+  ✅ Ep 6: Loss 0.0000 | 0.0s
+
+  ✅ Ep 7: Loss 0.0000 | 0.0s
+
+  ✅ Ep 8: Loss 0.0000 | 0.0s
+
+  ✅ Ep 9: Loss 0.0000 | 0.0s
+
+  ✅ Ep 10: Loss 0.0000 | 0.0s
+
+  ✅ Ep 11: Loss 0.0000 | 0.0s
+
+  ✅ Ep 12: Loss 0.0000 | 0.0s
+
+  ✅ Ep 13: Loss 0.0000 | 0.0s
+
+  ✅ Ep 14: Loss 0.0000 | 0.0s
+
+  ✅ Ep 15: Loss 0.0000 | 0.0s
+
+  ✅ Ep 16: Loss 0.0000 | 0.0s
+
+  ✅ Ep 17: Loss 0.0000 | 0.0s
+
+  ✅ Ep 18: Loss 0.0000 | 0.0s
+
+  ✅ Ep 19: Loss 0.0000 | 0.0s
+
+  ✅ Ep 20: Loss 0.0000 | 0.0s
+
+  ✅ Ep 21: Loss 0.0000 | 0.0s
+
+  ✅ Ep 22: Loss 0.0000 | 0.0s
+
+  ✅ Ep 23: Loss 0.0000 | 0.0s
+
+  ✅ Ep 24: Loss 0.0000 | 0.0s
+
+  ✅ Ep 25: Loss 0.0000 | 0.0s
+
+  ✅ Ep 26: Loss 0.0000 | 0.0s
+
+  ✅ Ep 27: Loss 0.0000 | 0.0s
+
+  ✅ Ep 28: Loss 0.0000 | 0.0s
+
+  ✅ Ep 29: Loss 0.0000 | 0.0s
+
+  ✅ Ep 30: Loss 0.0000 | 0.0s
+
+  ✅ Ep 31: Loss 0.0000 | 0.0s
+
+  ✅ Ep 32: Loss 0.0000 | 0.0s
+
+  ✅ Ep 33: Loss 0.0000 | 0.0s
+
+  ✅ Ep 34: Loss 0.0000 | 0.0s
+
+  ✅ Ep 35: Loss 0.0000 | 0.0s
+
+  ✅ Ep 36: Loss 0.0000 | 0.0s
+
+  ✅ Ep 37: Loss 0.0000 | 0.0s
+
+  ✅ Ep 38: Loss 0.0000 | 0.0s
+
+  ✅ Ep 39: Loss 0.0000 | 0.0s
+
+  ✅ Ep 40: Loss 0.0000 | 0.0s
+
+  ✅ Ep 41: Loss 0.0000 | 0.0s
+
+  ✅ Ep 42: Loss 0.0000 | 0.0s
+
+  ✅ Ep 43: Loss 0.0000 | 0.0s
+
+  ✅ Ep 44: Loss 0.0000 | 0.0s
+
+  ✅ Ep 45: Loss 0.0000 | 0.0s
+
+  ✅ Ep 46: Loss 0.0000 | 0.0s
+
+  ✅ Ep 47: Loss 0.0000 | 0.0s
+
+  ✅ Ep 48: Loss 0.0000 | 0.0s
+
+  ✅ Ep 49: Loss 0.0000 | 0.0s
+
+  ✅ Ep 50: Loss 0.0000 | 0.0s
+
+  ✅ Ep 51: Loss 0.0000 | 0.0s
+
+  ✅ Ep 52: Loss 0.0000 | 0.0s
+
+  ✅ Ep 53: Loss 0.0000 | 0.0s
+
+  ✅ Ep 54: Loss 0.0000 | 0.0s
+
+  ✅ Ep 55: Loss 0.0000 | 0.0s
+
+  ✅ Ep 56: Loss 0.0000 | 0.0s
+
+  ✅ Ep 57: Loss 0.0000 | 0.0s
+
+  ✅ Ep 58: Loss 0.0000 | 0.0s
+
+  ✅ Ep 59: Loss 0.0000 | 0.0s
+
+  ✅ Ep 60: Loss 0.0000 | 0.0s
+
+  ✅ Ep 61: Loss 0.0000 | 0.0s
+
+  ✅ Ep 62: Loss 0.0000 | 0.0s
+
+  ✅ Ep 63: Loss 0.0000 | 0.0s
+
+  ✅ Ep 64: Loss 0.0000 | 0.0s
+
+  ✅ Ep 65: Loss 0.0000 | 0.0s
+
+  ✅ Ep 66: Loss 0.0000 | 0.0s
+
+  ✅ Ep 67: Loss 0.0000 | 0.0s
+
+  ✅ Ep 68: Loss 0.0000 | 0.0s
+
+  ✅ Ep 69: Loss 0.0000 | 0.0s
+
+  ✅ Ep 70: Loss 0.0000 | 0.0s
+
+  ✅ Ep 71: Loss 0.0000 | 0.0s
+
+  ✅ Ep 72: Loss 0.0000 | 0.0s
+
+  ✅ Ep 73: Loss 0.0000 | 0.0s
+
+  ✅ Ep 74: Loss 0.0000 | 0.0s
+
+  ✅ Ep 75: Loss 0.0000 | 0.0s
+
+  ✅ Ep 76: Loss 0.0000 | 0.0s
+
+  ✅ Ep 77: Loss 0.0000 | 0.0s
+
+  ✅ Ep 78: Loss 0.0000 | 0.0s
+
+  ✅ Ep 79: Loss 0.0000 | 0.0s
+
+  ✅ Ep 80: Loss 0.0000 | 0.0s
+
+  ✅ Ep 81: Loss 0.0000 | 0.0s
+
+  ✅ Ep 82: Loss 0.0000 | 0.0s
+
+  ✅ Ep 83: Loss 0.0000 | 0.0s
+
+  ✅ Ep 84: Loss 0.0000 | 0.0s
+
+  ✅ Ep 85: Loss 0.0000 | 0.0s
+
+  ✅ Ep 86: Loss 0.0000 | 0.0s
+
+  ✅ Ep 87: Loss 0.0000 | 0.0s
+
+  ✅ Ep 88: Loss 0.0000 | 0.0s
+
+  ✅ Ep 89: Loss 0.0000 | 0.0s
+
+  ✅ Ep 90: Loss 0.0000 | 0.0s
+
+  ✅ Ep 91: Loss 0.0000 | 0.0s
+
+  ✅ Ep 92: Loss 0.0000 | 0.0s
+
+  ✅ Ep 93: Loss 0.0000 | 0.0s
+
+  ✅ Ep 94: Loss 0.0000 | 0.0s
+
+  ✅ Ep 95: Loss 0.0000 | 0.0s
+
+  ✅ Ep 96: Loss 0.0000 | 0.0s
+
+  ✅ Ep 97: Loss 0.0000 | 0.0s
+
+  ✅ Ep 98: Loss 0.0000 | 0.0s
+
+  ✅ Ep 99: Loss 0.0000 | 0.0s
+
+  ✅ Ep 100: Loss 0.0000 | 0.0s
+
+⏱ Total: 0.0s
+[1;32m💾 Saved at epoch 1500 (970.0 MB)[0m
+
+🔄 Section 16/100, epochs 1501-1600
+
+🧠 TRUE KNOWLEDGE DISTILLATION
+   Epochs: 100
+   Samples: 300
+   📊 Architecture: gpt2
+   📊 Layers: 6, Hidden: 768, Vocab: 50257
+   ✅ 82 tensors loaded
+
+  ✅ Ep 1: Loss 0.0000 | 0.0s
+
+  ✅ Ep 2: Loss 0.0000 | 0.0s
+
+  ✅ Ep 3: Loss 0.0000 | 0.0s
+
+  ✅ Ep 4: Loss 0.0000 | 0.0s
+
+  ✅ Ep 5: Loss 0.0000 | 0.0s
+
+  ✅ Ep 6: Loss 0.0000 | 0.0s
+
+  ✅ Ep 7: Loss 0.0000 | 0.0s
+
+  ✅ Ep 8: Loss 0.0000 | 0.0s
+
+  ✅ Ep 9: Loss 0.0000 | 0.0s
+
+  ✅ Ep 10: Loss 0.0000 | 0.0s
+
+  ✅ Ep 11: Loss 0.0000 | 0.0s
+
+  ✅ Ep 12: Loss 0.0000 | 0.0s
+
+  ✅ Ep 13: Loss 0.0000 | 0.0s
+
+  ✅ Ep 14: Loss 0.0000 | 0.0s
+
+  ✅ Ep 15: Loss 0.0000 | 0.0s
+
+  ✅ Ep 16: Loss 0.0000 | 0.0s
+
+  ✅ Ep 17: Loss 0.0000 | 0.0s
+
+  ✅ Ep 18: Loss 0.0000 | 0.0s
+
+  ✅ Ep 19: Loss 0.0000 | 0.0s
+
+  ✅ Ep 20: Loss 0.0000 | 0.0s
+
+  ✅ Ep 21: Loss 0.0000 | 0.0s
+
+  ✅ Ep 22: Loss 0.0000 | 0.0s
+
+  ✅ Ep 23: Loss 0.0000 | 0.0s
+
+  ✅ Ep 24: Loss 0.0000 | 0.0s
+
+  ✅ Ep 25: Loss 0.0000 | 0.0s
+
+  ✅ Ep 26: Loss 0.0000 | 0.0s
+
+  ✅ Ep 27: Loss 0.0000 | 0.0s
+
+  ✅ Ep 28: Loss 0.0000 | 0.0s
+
+  ✅ Ep 29: Loss 0.0000 | 0.0s
+
+  ✅ Ep 30: Loss 0.0000 | 0.0s
+
+  ✅ Ep 31: Loss 0.0000 | 0.0s
+
+  ✅ Ep 32: Loss 0.0000 | 0.0s
+
+  ✅ Ep 33: Loss 0.0000 | 0.0s
+
+  ✅ Ep 34: Loss 0.0000 | 0.0s
+
+  ✅ Ep 35: Loss 0.0000 | 0.0s
+
+  ✅ Ep 36: Loss 0.0000 | 0.0s
+
+  ✅ Ep 37: Loss 0.0000 | 0.0s
+
+  ✅ Ep 38: Loss 0.0000 | 0.0s
+
+  ✅ Ep 39: Loss 0.0000 | 0.0s
+
+  ✅ Ep 40: Loss 0.0000 | 0.0s
+
+  ✅ Ep 41: Loss 0.0000 | 0.0s
+
+  ✅ Ep 42: Loss 0.0000 | 0.0s
+
+  ✅ Ep 43: Loss 0.0000 | 0.0s
+
+  ✅ Ep 44: Loss 0.0000 | 0.0s
+
+  ✅ Ep 45: Loss 0.0000 | 0.0s
+
+  ✅ Ep 46: Loss 0.0000 | 0.0s
+
+  ✅ Ep 47: Loss 0.0000 | 0.0s
+
+  ✅ Ep 48: Loss 0.0000 | 0.0s
+
+  ✅ Ep 49: Loss 0.0000 | 0.0s
+
+  ✅ Ep 50: Loss 0.0000 | 0.0s
+
+  ✅ Ep 51: Loss 0.0000 | 0.0s
+
+  ✅ Ep 52: Loss 0.0000 | 0.0s
+
+  ✅ Ep 53: Loss 0.0000 | 0.0s
+
+  ✅ Ep 54: Loss 0.0000 | 0.0s
+
+  ✅ Ep 55: Loss 0.0000 | 0.0s
+
+  ✅ Ep 56: Loss 0.0000 | 0.0s
+
+  ✅ Ep 57: Loss 0.0000 | 0.0s
+
+  ✅ Ep 58: Loss 0.0000 | 0.0s
+
+  ✅ Ep 59: Loss 0.0000 | 0.0s
+
+  ✅ Ep 60: Loss 0.0000 | 0.0s
+
+  ✅ Ep 61: Loss 0.0000 | 0.0s
+
+  ✅ Ep 62: Loss 0.0000 | 0.0s
+
+  ✅ Ep 63: Loss 0.0000 | 0.0s
+
+  ✅ Ep 64: Loss 0.0000 | 0.0s
+
+  ✅ Ep 65: Loss 0.0000 | 0.0s
+
+  ✅ Ep 66: Loss 0.0000 | 0.0s
+
+  ✅ Ep 67: Loss 0.0000 | 0.0s
+
+  ✅ Ep 68: Loss 0.0000 | 0.0s
+
+  ✅ Ep 69: Loss 0.0000 | 0.0s
+
+  ✅ Ep 70: Loss 0.0000 | 0.0s
+
+  ✅ Ep 71: Loss 0.0000 | 0.0s
+
+  ✅ Ep 72: Loss 0.0000 | 0.0s
+
+  ✅ Ep 73: Loss 0.0000 | 0.0s
+
+  ✅ Ep 74: Loss 0.0000 | 0.0s
+
+  ✅ Ep 75: Loss 0.0000 | 0.0s
+
+  ✅ Ep 76: Loss 0.0000 | 0.0s
+
+  ✅ Ep 77: Loss 0.0000 | 0.0s
+
+  ✅ Ep 78: Loss 0.0000 | 0.0s
+
+  ✅ Ep 79: Loss 0.0000 | 0.0s
+
+  ✅ Ep 80: Loss 0.0000 | 0.0s
+
+  ✅ Ep 81: Loss 0.0000 | 0.0s
+
+  ✅ Ep 82: Loss 0.0000 | 0.0s
+
+  ✅ Ep 83: Loss 0.0000 | 0.0s
+
+  ✅ Ep 84: Loss 0.0000 | 0.0s
+
+  ✅ Ep 85: Loss 0.0000 | 0.0s
+
+  ✅ Ep 86: Loss 0.0000 | 0.0s
+
+  ✅ Ep 87: Loss 0.0000 | 0.0s
+
+  ✅ Ep 88: Loss 0.0000 | 0.0s
+
+  ✅ Ep 89: Loss 0.0000 | 0.0s
+
+  ✅ Ep 90: Loss 0.0000 | 0.0s
+
+  ✅ Ep 91: Loss 0.0000 | 0.0s
+
+  ✅ Ep 92: Loss 0.0000 | 0.0s
+
+  ✅ Ep 93: Loss 0.0000 | 0.0s
+
+  ✅ Ep 94: Loss 0.0000 | 0.0s
+
+  ✅ Ep 95: Loss 0.0000 | 0.0s
+
+  ✅ Ep 96: Loss 0.0000 | 0.0s
+
+  ✅ Ep 97: Loss 0.0000 | 0.0s
+
+  ✅ Ep 98: Loss 0.0000 | 0.0s
+
+  ✅ Ep 99: Loss 0.0000 | 0.0s
+
+  ✅ Ep 100: Loss 0.0000 | 0.0s
+
+⏱ Total: 0.0s
+[1;32m💾 Saved at epoch 1600 (970.0 MB)[0m
+
+🔄 Section 17/100, epochs 1601-1700
+
+🧠 TRUE KNOWLEDGE DISTILLATION
+   Epochs: 100
+   Samples: 300
+   📊 Architecture: gpt2
+   📊 Layers: 6, Hidden: 768, Vocab: 50257
+   ✅ 82 tensors loaded
+
+  ✅ Ep 1: Loss 0.0000 | 0.0s
+
+  ✅ Ep 2: Loss 0.0000 | 0.0s
+
+  ✅ Ep 3: Loss 0.0000 | 0.0s
+
+  ✅ Ep 4: Loss 0.0000 | 0.0s
+
+  ✅ Ep 5: Loss 0.0000 | 0.0s
+
+  ✅ Ep 6: Loss 0.0000 | 0.0s
+
+  ✅ Ep 7: Loss 0.0000 | 0.0s
+
+  ✅ Ep 8: Loss 0.0000 | 0.0s
+
+  ✅ Ep 9: Loss 0.0000 | 0.0s
+
+  ✅ Ep 10: Loss 0.0000 | 0.0s
+
+  ✅ Ep 11: Loss 0.0000 | 0.0s
+
+  ✅ Ep 12: Loss 0.0000 | 0.0s
+
+  ✅ Ep 13: Loss 0.0000 | 0.0s
+
+  ✅ Ep 14: Loss 0.0000 | 0.0s
+
+  ✅ Ep 15: Loss 0.0000 | 0.0s
+
+  ✅ Ep 16: Loss 0.0000 | 0.0s
+
+  ✅ Ep 17: Loss 0.0000 | 0.0s
+
+  ✅ Ep 18: Loss 0.0000 | 0.0s
+
+  ✅ Ep 19: Loss 0.0000 | 0.0s
+
+  ✅ Ep 20: Loss 0.0000 | 0.0s
+
+  ✅ Ep 21: Loss 0.0000 | 0.0s
+
+  ✅ Ep 22: Loss 0.0000 | 0.0s
+
+  ✅ Ep 23: Loss 0.0000 | 0.0s
+
+  ✅ Ep 24: Loss 0.0000 | 0.0s
+
+  ✅ Ep 25: Loss 0.0000 | 0.0s
+
+  ✅ Ep 26: Loss 0.0000 | 0.0s
+
+  ✅ Ep 27: Loss 0.0000 | 0.0s
+
+  ✅ Ep 28: Loss 0.0000 | 0.0s
+
+  ✅ Ep 29: Loss 0.0000 | 0.0s
+
+  ✅ Ep 30: Loss 0.0000 | 0.0s
+
+  ✅ Ep 31: Loss 0.0000 | 0.0s
+
+  ✅ Ep 32: Loss 0.0000 | 0.0s
+
+  ✅ Ep 33: Loss 0.0000 | 0.0s
+
+  ✅ Ep 34: Loss 0.0000 | 0.0s
+
+  ✅ Ep 35: Loss 0.0000 | 0.0s
+
+  ✅ Ep 36: Loss 0.0000 | 0.0s
+
+  ✅ Ep 37: Loss 0.0000 | 0.0s
+
+  ✅ Ep 38: Loss 0.0000 | 0.0s
+
+  ✅ Ep 39: Loss 0.0000 | 0.0s
+
+  ✅ Ep 40: Loss 0.0000 | 0.0s
+
+  ✅ Ep 41: Loss 0.0000 | 0.0s
+
+  ✅ Ep 42: Loss 0.0000 | 0.0s
+
+  ✅ Ep 43: Loss 0.0000 | 0.0s
+
+  ✅ Ep 44: Loss 0.0000 | 0.0s
+
+  ✅ Ep 45: Loss 0.0000 | 0.0s
+
+  ✅ Ep 46: Loss 0.0000 | 0.0s
+
+  ✅ Ep 47: Loss 0.0000 | 0.0s
+
+  ✅ Ep 48: Loss 0.0000 | 0.0s
+
+  ✅ Ep 49: Loss 0.0000 | 0.0s
+
+  ✅ Ep 50: Loss 0.0000 | 0.0s
+
+  ✅ Ep 51: Loss 0.0000 | 0.0s
+
+  ✅ Ep 52: Loss 0.0000 | 0.0s
+
+  ✅ Ep 53: Loss 0.0000 | 0.0s
+
+  ✅ Ep 54: Loss 0.0000 | 0.0s
+
+  ✅ Ep 55: Loss 0.0000 | 0.0s
+
+  ✅ Ep 56: Loss 0.0000 | 0.0s
+
+  ✅ Ep 57: Loss 0.0000 | 0.0s
+
+  ✅ Ep 58: Loss 0.0000 | 0.0s
+
+  ✅ Ep 59: Loss 0.0000 | 0.0s
+
+  ✅ Ep 60: Loss 0.0000 | 0.0s
+
+  ✅ Ep 61: Loss 0.0000 | 0.0s
+
+  ✅ Ep 62: Loss 0.0000 | 0.0s
+
+  ✅ Ep 63: Loss 0.0000 | 0.0s
+
+  ✅ Ep 64: Loss 0.0000 | 0.0s
+
+  ✅ Ep 65: Loss 0.0000 | 0.0s
+
+  ✅ Ep 66: Loss 0.0000 | 0.0s
+
+  ✅ Ep 67: Loss 0.0000 | 0.0s
+
+  ✅ Ep 68: Loss 0.0000 | 0.0s
+
+  ✅ Ep 69: Loss 0.0000 | 0.0s
+
+  ✅ Ep 70: Loss 0.0000 | 0.0s
+
+  ✅ Ep 71: Loss 0.0000 | 0.0s
+
+  ✅ Ep 72: Loss 0.0000 | 0.0s
+
+  ✅ Ep 73: Loss 0.0000 | 0.0s
+
+  ✅ Ep 74: Loss 0.0000 | 0.0s
+
+  ✅ Ep 75: Loss 0.0000 | 0.0s
+
+  ✅ Ep 76: Loss 0.0000 | 0.0s
+
+  ✅ Ep 77: Loss 0.0000 | 0.0s
+
+  ✅ Ep 78: Loss 0.0000 | 0.0s
+
+  ✅ Ep 79: Loss 0.0000 | 0.0s
+
+  ✅ Ep 80: Loss 0.0000 | 0.0s
+
+  ✅ Ep 81: Loss 0.0000 | 0.0s
+
+  ✅ Ep 82: Loss 0.0000 | 0.0s
+
+  ✅ Ep 83: Loss 0.0000 | 0.0s
+
+  ✅ Ep 84: Loss 0.0000 | 0.0s
+
+  ✅ Ep 85: Loss 0.0000 | 0.0s
+
+  ✅ Ep 86: Loss 0.0000 | 0.0s
+
+  ✅ Ep 87: Loss 0.0000 | 0.0s
+
+  ✅ Ep 88: Loss 0.0000 | 0.0s
+
+  ✅ Ep 89: Loss 0.0000 | 0.0s
+
+  ✅ Ep 90: Loss 0.0000 | 0.0s
+
+  ✅ Ep 91: Loss 0.0000 | 0.0s
+
+  ✅ Ep 92: Loss 0.0000 | 0.0s
+
+  ✅ Ep 93: Loss 0.0000 | 0.0s
+
+  ✅ Ep 94: Loss 0.0000 | 0.0s
+
+  ✅ Ep 95: Loss 0.0000 | 0.0s
+
+  ✅ Ep 96: Loss 0.0000 | 0.0s
+
+  ✅ Ep 97: Loss 0.0000 | 0.0s
+
+  ✅ Ep 98: Loss 0.0000 | 0.0s
+
+  ✅ Ep 99: Loss 0.0000 | 0.0s
+
+  ✅ Ep 100: Loss 0.0000 | 0.0s
+
+⏱ Total: 0.0s
+[1;32m💾 Saved at epoch 1700 (970.0 MB)[0m
+
+🔄 Section 18/100, epochs 1701-1800
+
+🧠 TRUE KNOWLEDGE DISTILLATION
+   Epochs: 100
+   Samples: 300
+   📊 Architecture: gpt2
+   📊 Layers: 6, Hidden: 768, Vocab: 50257
+   ✅ 82 tensors loaded
+
+  ✅ Ep 1: Loss 0.0000 | 0.0s
+
+  ✅ Ep 2: Loss 0.0000 | 0.0s
+
+  ✅ Ep 3: Loss 0.0000 | 0.0s
+
+  ✅ Ep 4: Loss 0.0000 | 0.0s
+
+  ✅ Ep 5: Loss 0.0000 | 0.0s
+
+  ✅ Ep 6: Loss 0.0000 | 0.0s
+
+  ✅ Ep 7: Loss 0.0000 | 0.0s
+
+  ✅ Ep 8: Loss 0.0000 | 0.0s
+
+  ✅ Ep 9: Loss 0.0000 | 0.0s
+
+  ✅ Ep 10: Loss 0.0000 | 0.0s
+
+  ✅ Ep 11: Loss 0.0000 | 0.0s
+
+  ✅ Ep 12: Loss 0.0000 | 0.0s
+
+  ✅ Ep 13: Loss 0.0000 | 0.0s
+
+  ✅ Ep 14: Loss 0.0000 | 0.0s
+
+  ✅ Ep 15: Loss 0.0000 | 0.0s
+
+  ✅ Ep 16: Loss 0.0000 | 0.0s
+
+  ✅ Ep 17: Loss 0.0000 | 0.0s
+
+  ✅ Ep 18: Loss 0.0000 | 0.0s
+
+  ✅ Ep 19: Loss 0.0000 | 0.0s
+
+  ✅ Ep 20: Loss 0.0000 | 0.0s
+
+  ✅ Ep 21: Loss 0.0000 | 0.0s
+
+  ✅ Ep 22: Loss 0.0000 | 0.0s
+
+  ✅ Ep 23: Loss 0.0000 | 0.0s
+
+  ✅ Ep 24: Loss 0.0000 | 0.0s
+
+  ✅ Ep 25: Loss 0.0000 | 0.0s
+
+  ✅ Ep 26: Loss 0.0000 | 0.0s
+
+  ✅ Ep 27: Loss 0.0000 | 0.0s
+
+  ✅ Ep 28: Loss 0.0000 | 0.0s
+
+  ✅ Ep 29: Loss 0.0000 | 0.0s
+
+  ✅ Ep 30: Loss 0.0000 | 0.0s
+
+  ✅ Ep 31: Loss 0.0000 | 0.0s
+
+  ✅ Ep 32: Loss 0.0000 | 0.0s
+
+  ✅ Ep 33: Loss 0.0000 | 0.0s
+
+  ✅ Ep 34: Loss 0.0000 | 0.0s
+
+  ✅ Ep 35: Loss 0.0000 | 0.0s
+
+  ✅ Ep 36: Loss 0.0000 | 0.0s
+
+  ✅ Ep 37: Loss 0.0000 | 0.0s
+
+  ✅ Ep 38: Loss 0.0000 | 0.0s
+
+  ✅ Ep 39: Loss 0.0000 | 0.0s
+
+  ✅ Ep 40: Loss 0.0000 | 0.0s
+
+  ✅ Ep 41: Loss 0.0000 | 0.0s
+
+  ✅ Ep 42: Loss 0.0000 | 0.0s
+
+  ✅ Ep 43: Loss 0.0000 | 0.0s
+
+  ✅ Ep 44: Loss 0.0000 | 0.0s
+
+  ✅ Ep 45: Loss 0.0000 | 0.0s
+
+  ✅ Ep 46: Loss 0.0000 | 0.0s
+
+  ✅ Ep 47: Loss 0.0000 | 0.0s
+
+  ✅ Ep 48: Loss 0.0000 | 0.0s
+
+  ✅ Ep 49: Loss 0.0000 | 0.0s
+
+  ✅ Ep 50: Loss 0.0000 | 0.0s
+
+  ✅ Ep 51: Loss 0.0000 | 0.0s
+
+  ✅ Ep 52: Loss 0.0000 | 0.0s
+
+  ✅ Ep 53: Loss 0.0000 | 0.0s
+
+  ✅ Ep 54: Loss 0.0000 | 0.0s
+
+  ✅ Ep 55: Loss 0.0000 | 0.0s
+
+  ✅ Ep 56: Loss 0.0000 | 0.0s
+
+  ✅ Ep 57: Loss 0.0000 | 0.0s
+
+  ✅ Ep 58: Loss 0.0000 | 0.0s
+
+  ✅ Ep 59: Loss 0.0000 | 0.0s
+
+  ✅ Ep 60: Loss 0.0000 | 0.0s
+
+  ✅ Ep 61: Loss 0.0000 | 0.0s
+
+  ✅ Ep 62: Loss 0.0000 | 0.0s
+
+  ✅ Ep 63: Loss 0.0000 | 0.0s
+
+  ✅ Ep 64: Loss 0.0000 | 0.0s
+
+  ✅ Ep 65: Loss 0.0000 | 0.0s
+
+  ✅ Ep 66: Loss 0.0000 | 0.0s
+
+  ✅ Ep 67: Loss 0.0000 | 0.0s
+
+  ✅ Ep 68: Loss 0.0000 | 0.0s
+
+  ✅ Ep 69: Loss 0.0000 | 0.0s
+
+  ✅ Ep 70: Loss 0.0000 | 0.0s
+
+  ✅ Ep 71: Loss 0.0000 | 0.0s
+
+  ✅ Ep 72: Loss 0.0000 | 0.0s
+
+  ✅ Ep 73: Loss 0.0000 | 0.0s
+
+  ✅ Ep 74: Loss 0.0000 | 0.0s
+
+  ✅ Ep 75: Loss 0.0000 | 0.0s
+
+  ✅ Ep 76: Loss 0.0000 | 0.0s
+
+  ✅ Ep 77: Loss 0.0000 | 0.0s
+
+  ✅ Ep 78: Loss 0.0000 | 0.0s
+
+  ✅ Ep 79: Loss 0.0000 | 0.0s
+
+  ✅ Ep 80: Loss 0.0000 | 0.0s
+
+  ✅ Ep 81: Loss 0.0000 | 0.0s
+
+  ✅ Ep 82: Loss 0.0000 | 0.0s
+
+  ✅ Ep 83: Loss 0.0000 | 0.0s
+
+  ✅ Ep 84: Loss 0.0000 | 0.0s
+
+  ✅ Ep 85: Loss 0.0000 | 0.0s
+
+  ✅ Ep 86: Loss 0.0000 | 0.0s
+
+  ✅ Ep 87: Loss 0.0000 | 0.0s
+
+  ✅ Ep 88: Loss 0.0000 | 0.0s
+
+  ✅ Ep 89: Loss 0.0000 | 0.0s
+
+  ✅ Ep 90: Loss 0.0000 | 0.0s
+
+  ✅ Ep 91: Loss 0.0000 | 0.0s
+
+  ✅ Ep 92: Loss 0.0000 | 0.0s
+
+  ✅ Ep 93: Loss 0.0000 | 0.0s
+
+  ✅ Ep 94: Loss 0.0000 | 0.0s
+
+  ✅ Ep 95: Loss 0.0000 | 0.0s
+
+  ✅ Ep 96: Loss 0.0000 | 0.0s
+
+  ✅ Ep 97: Loss 0.0000 | 0.0s
+
+  ✅ Ep 98: Loss 0.0000 | 0.0s
+
+  ✅ Ep 99: Loss 0.0000 | 0.0s
+
+  ✅ Ep 100: Loss 0.0000 | 0.0s
+
+⏱ Total: 0.0s
+[1;32m💾 Saved at epoch 1800 (970.0 MB)[0m
+
+🔄 Section 19/100, epochs 1801-1900
+
+🧠 TRUE KNOWLEDGE DISTILLATION
+   Epochs: 100
+   Samples: 300
+   📊 Architecture: gpt2
+   📊 Layers: 6, Hidden: 768, Vocab: 50257
+   ✅ 82 tensors loaded
+
+  ✅ Ep 1: Loss 0.0000 | 0.0s
+
+  ✅ Ep 2: Loss 0.0000 | 0.0s
+
+  ✅ Ep 3: Loss 0.0000 | 0.0s
+
+  ✅ Ep 4: Loss 0.0000 | 0.0s
+
+  ✅ Ep 5: Loss 0.0000 | 0.0s
+
+  ✅ Ep 6: Loss 0.0000 | 0.0s
+
+  ✅ Ep 7: Loss 0.0000 | 0.0s
+
+  ✅ Ep 8: Loss 0.0000 | 0.0s
+
+  ✅ Ep 9: Loss 0.0000 | 0.0s
+
+  ✅ Ep 10: Loss 0.0000 | 0.0s
+
+  ✅ Ep 11: Loss 0.0000 | 0.0s
+
+  ✅ Ep 12: Loss 0.0000 | 0.0s
+
+  ✅ Ep 13: Loss 0.0000 | 0.0s
+
+  ✅ Ep 14: Loss 0.0000 | 0.0s
+
+  ✅ Ep 15: Loss 0.0000 | 0.0s
+
+  ✅ Ep 16: Loss 0.0000 | 0.0s
+
+  ✅ Ep 17: Loss 0.0000 | 0.0s
+
+  ✅ Ep 18: Loss 0.0000 | 0.0s
+
+  ✅ Ep 19: Loss 0.0000 | 0.0s
+
+  ✅ Ep 20: Loss 0.0000 | 0.0s
+
+  ✅ Ep 21: Loss 0.0000 | 0.0s
+
+  ✅ Ep 22: Loss 0.0000 | 0.0s
+
+  ✅ Ep 23: Loss 0.0000 | 0.0s
+
+  ✅ Ep 24: Loss 0.0000 | 0.0s
+
+  ✅ Ep 25: Loss 0.0000 | 0.0s
+
+  ✅ Ep 26: Loss 0.0000 | 0.0s
+
+  ✅ Ep 27: Loss 0.0000 | 0.0s
+
+  ✅ Ep 28: Loss 0.0000 | 0.0s
+
+  ✅ Ep 29: Loss 0.0000 | 0.0s
+
+  ✅ Ep 30: Loss 0.0000 | 0.0s
+
+  ✅ Ep 31: Loss 0.0000 | 0.0s
+
+  ✅ Ep 32: Loss 0.0000 | 0.0s
+
+  ✅ Ep 33: Loss 0.0000 | 0.0s
+
+  ✅ Ep 34: Loss 0.0000 | 0.0s
+
+  ✅ Ep 35: Loss 0.0000 | 0.0s
+
+  ✅ Ep 36: Loss 0.0000 | 0.0s
+
+  ✅ Ep 37: Loss 0.0000 | 0.0s
+
+  ✅ Ep 38: Loss 0.0000 | 0.0s
+
+  ✅ Ep 39: Loss 0.0000 | 0.0s
+
+  ✅ Ep 40: Loss 0.0000 | 0.0s
+
+  ✅ Ep 41: Loss 0.0000 | 0.0s
+
+  ✅ Ep 42: Loss 0.0000 | 0.0s
+
+  ✅ Ep 43: Loss 0.0000 | 0.0s
+
+  ✅ Ep 44: Loss 0.0000 | 0.0s
+
+  ✅ Ep 45: Loss 0.0000 | 0.0s
+
+  ✅ Ep 46: Loss 0.0000 | 0.0s
+
+  ✅ Ep 47: Loss 0.0000 | 0.0s
+
+  ✅ Ep 48: Loss 0.0000 | 0.0s
+
+  ✅ Ep 49: Loss 0.0000 | 0.0s
+
+  ✅ Ep 50: Loss 0.0000 | 0.0s
+
+  ✅ Ep 51: Loss 0.0000 | 0.0s
+
+  ✅ Ep 52: Loss 0.0000 | 0.0s
+
+  ✅ Ep 53: Loss 0.0000 | 0.0s
+
+  ✅ Ep 54: Loss 0.0000 | 0.0s
+
+  ✅ Ep 55: Loss 0.0000 | 0.0s
+
+  ✅ Ep 56: Loss 0.0000 | 0.0s
+
+  ✅ Ep 57: Loss 0.0000 | 0.0s
+
+  ✅ Ep 58: Loss 0.0000 | 0.0s
+
+  ✅ Ep 59: Loss 0.0000 | 0.0s
+
+  ✅ Ep 60: Loss 0.0000 | 0.0s
+
+  ✅ Ep 61: Loss 0.0000 | 0.0s
+
+  ✅ Ep 62: Loss 0.0000 | 0.0s
+
+  ✅ Ep 63: Loss 0.0000 | 0.0s
+
+  ✅ Ep 64: Loss 0.0000 | 0.0s
+
+  ✅ Ep 65: Loss 0.0000 | 0.0s
+
+  ✅ Ep 66: Loss 0.0000 | 0.0s
+
+  ✅ Ep 67: Loss 0.0000 | 0.0s
+
+  ✅ Ep 68: Loss 0.0000 | 0.0s
+
+  ✅ Ep 69: Loss 0.0000 | 0.0s
+
+  ✅ Ep 70: Loss 0.0000 | 0.0s
+
+  ✅ Ep 71: Loss 0.0000 | 0.0s
+
+  ✅ Ep 72: Loss 0.0000 | 0.0s
+
+  ✅ Ep 73: Loss 0.0000 | 0.0s
+
+  ✅ Ep 74: Loss 0.0000 | 0.0s
+
+  ✅ Ep 75: Loss 0.0000 | 0.0s
+
+  ✅ Ep 76: Loss 0.0000 | 0.0s
+
+  ✅ Ep 77: Loss 0.0000 | 0.0s
+
+  ✅ Ep 78: Loss 0.0000 | 0.0s
+
+  ✅ Ep 79: Loss 0.0000 | 0.0s
+
+  ✅ Ep 80: Loss 0.0000 | 0.0s
+
+  ✅ Ep 81: Loss 0.0000 | 0.0s
+
+  ✅ Ep 82: Loss 0.0000 | 0.0s
+
+  ✅ Ep 83: Loss 0.0000 | 0.0s
+
+  ✅ Ep 84: Loss 0.0000 | 0.0s
+
+  ✅ Ep 85: Loss 0.0000 | 0.0s
+
+  ✅ Ep 86: Loss 0.0000 | 0.0s
+
+  ✅ Ep 87: Loss 0.0000 | 0.0s
+
+  ✅ Ep 88: Loss 0.0000 | 0.0s
+
+  ✅ Ep 89: Loss 0.0000 | 0.0s
+
+  ✅ Ep 90: Loss 0.0000 | 0.0s
+
+  ✅ Ep 91: Loss 0.0000 | 0.0s
+
+  ✅ Ep 92: Loss 0.0000 | 0.0s
+
+  ✅ Ep 93: Loss 0.0000 | 0.0s
+
+  ✅ Ep 94: Loss 0.0000 | 0.0s
+
+  ✅ Ep 95: Loss 0.0000 | 0.0s
+
+  ✅ Ep 96: Loss 0.0000 | 0.0s
+
+  ✅ Ep 97: Loss 0.0000 | 0.0s
+
+  ✅ Ep 98: Loss 0.0000 | 0.0s
+
+  ✅ Ep 99: Loss 0.0000 | 0.0s
+
+  ✅ Ep 100: Loss 0.0000 | 0.0s
+
+⏱ Total: 0.0s
