@@ -4,18 +4,18 @@ pub mod mamba;
 pub mod attention;
 pub mod snn;
 
+use crate::layers::bitlinear::ZumarBitLinear;
 use crate::layers::moe::ZumarMoE;
 use crate::layers::attention::ZumarFlashAttention;
 use candle_core::{Tensor, Result, Device};
-use candle_nn::{Module, VarBuilder, Embedding, LayerNorm, Linear};
+use candle_nn::{Module, VarBuilder, Embedding, LayerNorm};
 
-/// كتلة Zumar بسيطة: Attention + MoE
 pub struct ZumarBlock {
     pub pre_norm: LayerNorm,
-    pub q_proj: Linear,
-    pub k_proj: Linear,
-    pub v_proj: Linear,
-    pub o_proj: Linear,
+    pub q_proj: ZumarBitLinear,
+    pub k_proj: ZumarBitLinear,
+    pub v_proj: ZumarBitLinear,
+    pub o_proj: ZumarBitLinear,
     pub attention: ZumarFlashAttention,
     pub moe: ZumarMoE,
     pub post_norm: LayerNorm,
@@ -25,7 +25,7 @@ pub struct ZumarModel {
     pub embedding: Embedding,
     pub layers: Vec<ZumarBlock>,
     pub final_norm: LayerNorm,
-    pub lm_head: Linear,
+    pub lm_head: ZumarBitLinear,
     pub hidden_size: usize,
     pub vocab_size: usize,
 }
@@ -35,10 +35,10 @@ impl ZumarBlock {
         in_dim: usize, num_experts: usize, top_k: usize, n_heads: usize, vs: VarBuilder,
     ) -> Result<Self> {
         let pre_norm = candle_nn::layer_norm(in_dim, 1e-5, vs.pp("input_layernorm"))?;
-        let q_proj = candle_nn::linear(in_dim, in_dim, vs.pp("self_attn.q_proj"))?;
-        let k_proj = candle_nn::linear(in_dim, in_dim, vs.pp("self_attn.k_proj"))?;
-        let v_proj = candle_nn::linear(in_dim, in_dim, vs.pp("self_attn.v_proj"))?;
-        let o_proj = candle_nn::linear(in_dim, in_dim, vs.pp("self_attn.o_proj"))?;
+        let q_proj = ZumarBitLinear::new(in_dim, in_dim, vs.pp("self_attn.q_proj"))?;
+        let k_proj = ZumarBitLinear::new(in_dim, in_dim, vs.pp("self_attn.k_proj"))?;
+        let v_proj = ZumarBitLinear::new(in_dim, in_dim, vs.pp("self_attn.v_proj"))?;
+        let o_proj = ZumarBitLinear::new(in_dim, in_dim, vs.pp("self_attn.o_proj"))?;
         let attention = ZumarFlashAttention::new(n_heads, in_dim / n_heads);
         let moe = ZumarMoE::new(in_dim, num_experts, top_k, vs.pp("mlp"))?;
         let post_norm = candle_nn::layer_norm(in_dim, 1e-5, vs.pp("post_attention_layernorm"))?;
@@ -77,7 +77,7 @@ impl ZumarModel {
             layers.push(ZumarBlock::new(in_dim, num_experts, top_k, n_heads, layer_vs)?);
         }
         let final_norm = candle_nn::layer_norm(in_dim, 1e-5, vs.pp("model.norm"))?;
-        let lm_head = candle_nn::linear(in_dim, vocab_size, vs.pp("lm_head"))?;
+        let lm_head = ZumarBitLinear::new(in_dim, vocab_size, vs.pp("lm_head"))?;
         Ok(Self { embedding, layers, final_norm, lm_head, hidden_size: in_dim, vocab_size })
     }
 

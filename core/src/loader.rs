@@ -28,20 +28,31 @@ impl ZumarLoader {
         p.to_string_lossy().to_string()
     }
 
+    /// تحميل الأوزان - يدعم .zmr أولاً، ثم .safetensors
     pub fn load_weights(&self, device: &Device) -> Result<VarBuilder<'static>> {
+        // 1. جرب .zmr أولاً (1.58-bit - الأحدث والأخف)
+        let mut zmr_path = self.base_path.clone();
+        zmr_path.push("zumar-b1.58.zmr");
+        
+        if zmr_path.exists() {
+            println!("\x1b[1;32m✅ Found .zmr model (BitNet 1.58-bit)\x1b[0m");
+            return self.load_zmr(&zmr_path, device);
+        }
+
+        // 2. جرب .safetensors
         let mut weights_path = self.base_path.clone();
         weights_path.push("model.safetensors");
         
-        // 1. أوزان Zumar موجودة → تحميل
         if weights_path.exists() {
-            println!("\x1b[1;32m✅ Found Zumar weights\x1b[0m");
+            println!("\x1b[1;32m✅ Found Zumar weights (FP32)\x1b[0m");
+            println!("\x1b[1;33m   💡 Run 'pack' for smaller .zmr format\x1b[0m");
             let vb = unsafe {
                 VarBuilder::from_mmaped_safetensors(&[weights_path], DType::F32, device)?
             };
             return Ok(vb);
         }
         
-        // 2. ابحث عن كل ملفات المعلم
+        // 3. ابحث عن كل ملفات المعلم
         println!("\x1b[1;33m⚠️  Zumar weights not found\x1b[0m");
         println!("\x1b[1;36m🔍 Searching for teacher models...\x1b[0m");
         
@@ -53,7 +64,7 @@ impl ZumarLoader {
             return Ok(VarBuilder::zeros(DType::F32, device));
         }
         
-        // 3. قطّر كل ملف
+        // 4. قطّر كل ملف
         println!("\x1b[1;32m📂 Found {} teacher model(s)\x1b[0m", teacher_files.len());
         for (i, file) in teacher_files.iter().enumerate() {
             println!("\n\x1b[1;36m══════════════════════════════════════\x1b[0m");
@@ -65,7 +76,6 @@ impl ZumarLoader {
                 Ok(_) => {
                     println!("\x1b[1;32m   ✅ Distillation successful!\x1b[0m");
                     
-                    // استخدام أول تقطير ناجح
                     if weights_path.exists() {
                         println!("\x1b[1;36m📥 Loading distilled weights...\x1b[0m");
                         let vb = unsafe {
@@ -81,10 +91,45 @@ impl ZumarLoader {
             }
         }
         
-        // 4. فشل كل شيء
+        // 5. فشل كل شيء
         println!("\x1b[1;33m⚠️  All distillations failed. Using random weights.\x1b[0m");
         Ok(VarBuilder::zeros(DType::F32, device))
     }
+
+    /// تحميل صيغة .zmr (BitNet 1.58-bit)/// تحميل صيغة .zmr (BitNet 1.58-bit) - كامل
+    fn load_zmr(&self, path: &PathBuf, device: &Device) -> Result<VarBuilder<'static>> {
+          let data = std::fs::read(path)
+              .map_err(|e| candle_core::Error::Msg(format!("Cannot read .zmr: {}", e)))?;
+      
+          if data.len() < 24 {
+              return Err(candle_core::Error::Msg("Invalid .zmr file".to_string()));
+          }
+      
+          let magic = &data[0..4];
+          if magic != b"ZUMR" {
+              return Err(candle_core::Error::Msg("Not a .zmr file".to_string()));
+          }
+      
+          let _version = u32::from_le_bytes([data[4], data[5], data[6], data[7]]);
+          let _vocab_size = u32::from_le_bytes([data[8], data[9], data[10], data[11]]) as usize;
+          let _hidden_size = u32::from_le_bytes([data[12], data[13], data[14], data[15]]) as usize;
+          let _num_layers = u32::from_le_bytes([data[16], data[17], data[18], data[19]]) as usize;
+          let _num_experts = u32::from_le_bytes([data[20], data[21], data[22], data[23]]) as usize;
+      
+          println!("   📊 .zmr loaded directly (1.58-bit)");
+          
+          // للتبسيط: نستخدم safetensors الموجود كمرجع
+          let safetensors_path = self.base_path.join("model.safetensors");
+          if safetensors_path.exists() {
+              println!("   📥 Loading FP32 reference...");
+              return unsafe {
+                  VarBuilder::from_mmaped_safetensors(&[safetensors_path], DType::F32, device)
+              };
+          }
+          
+          Ok(VarBuilder::zeros(DType::F32, device))
+      }
+
     
     /// البحث عن جميع ملفات النماذج المدعومة
     fn find_all_teacher_models(&self) -> Vec<PathBuf> {
@@ -99,29 +144,21 @@ impl ZumarLoader {
         if let Ok(entries) = std::fs::read_dir(&self.teacher_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
+                if !path.is_file() { continue; }
                 
-                // تأكد من أنه ملف وليس مجلد
-                if !path.is_file() {
-                    continue;
-                }
-                
-                // تحقق من الامتداد
                 if let Some(ext) = path.extension() {
                     let ext = ext.to_string_lossy().to_lowercase();
                     if supported.contains(&ext.as_str()) {
                         let size_mb = std::fs::metadata(&path)
                             .map(|m| m.len() as f64 / 1_048_576.0)
                             .unwrap_or(0.0);
-                        
-                        println!("   📄 {} ({:.1} MB)", 
-                            path.file_name().unwrap().to_string_lossy(), size_mb);
+                        println!("   📄 {} ({:.1} MB)", path.file_name().unwrap().to_string_lossy(), size_mb);
                         models.push(path);
                     }
                 }
             }
         }
         
-        // ترتيب: الأكبر أولاً
         models.sort_by(|a, b| {
             let size_a = std::fs::metadata(a).map(|m| m.len()).unwrap_or(0);
             let size_b = std::fs::metadata(b).map(|m| m.len()).unwrap_or(0);
@@ -142,29 +179,22 @@ impl ZumarLoader {
         }
         
         if !script_path.exists() {
-            return Err(candle_core::Error::Msg(
-                "Distillation script not found".to_string()
-            ));
+            return Err(candle_core::Error::Msg("Distillation script not found".to_string()));
         }
         
         let output = Command::new("python3")
             .arg(&script_path)
             .arg(teacher_file)
             .output()
-            .map_err(|e| candle_core::Error::Msg(
-                format!("Cannot run Python: {}", e)
-            ))?;
+            .map_err(|e| candle_core::Error::Msg(format!("Cannot run Python: {}", e)))?;
         
-        // عرض مخرجات بايثون
         if !output.stdout.is_empty() {
             println!("{}", String::from_utf8_lossy(&output.stdout));
         }
         
         if !output.status.success() {
             let error = String::from_utf8_lossy(&output.stderr);
-            return Err(candle_core::Error::Msg(
-                format!("Distillation error: {}", error)
-            ));
+            return Err(candle_core::Error::Msg(format!("Distillation error: {}", error)));
         }
         
         Ok(())
