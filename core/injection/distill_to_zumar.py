@@ -1,344 +1,515 @@
 #!/usr/bin/env python3
 """
-Zumar Distillation Script v3.0
-يحول أوزان نموذج معلم (Teacher) إلى هيكل ZumarModel متعدد الطبقات.
-يدعم: 30 طبقة، MoE بـ 8 خبراء، Mamba، LayerNorm، Embedding، LM Head.
+Zumar Intelligent Distillation v5.0
+يحول أي نموذج معلم إلى إعدادات Zumar الثابتة بذكاء.
+يستخدم: SVD، PCA، interpolation، و copying الذكي.
 """
 
 import numpy as np
 import json
 import struct
 import os
+from pathlib import Path
 from safetensors.numpy import save_file
+from scipy import linalg  # لـ SVD - تثبيت: pip install scipy
 
-# --- الإعدادات (مطابقة لـ main.rs) ---
-NUM_LAYERS = 12          # عدد الطبقات
-INPUT_DIM = 1024          # البعد الخفي
-NUM_EXPERTS = 8           # عدد الخبراء في MoE
-TOP_K = 2                 # عدد الخبراء النشطين
-VOCAB_SIZE = 50257        # حجم المفردات
-N_HEADS = 16              # عدد رؤوس الانتباه
-HEAD_DIM = INPUT_DIM // N_HEADS  # 64
+# ============================================================
+# 🎯 إعدادات Zumar الثابتة (مطابقة لـ main.rs)
+# ============================================================
+ZUMAR_CONFIG = {
+    "vocab_size": 50257,
+    "hidden_dim": 1024,
+    "num_layers": 12,
+    "num_experts": 8,
+    "top_k": 2,
+    "n_heads": 16,
+    "head_dim": 64,  # 1024 / 16
+}
 
-# --- مسارات الملفات ---
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-TEACHER_DIR = os.path.join(BASE_DIR, "models", "teacher")
-SOURCE_FILE = os.path.join(TEACHER_DIR, "model.safetensors")
-TARGET_DIR = os.path.join(BASE_DIR, "models", "zumar-v1")
-OUTPUT_FILE = os.path.join(TARGET_DIR, "model.safetensors")
+# ============================================================
+# 🔍 نظام اكتشاف المعلم
+# ============================================================
 
-
-def load_safetensors_manually(file_path):
-    """
-    تحميل ملف safetensors يدوياً بدون مكتبة safetensors كاملة.
-    يدعم تنسيق BF16 (الشائع في TinyLlama والنماذج الصغيرة).
-    """
-    with open(file_path, "rb") as f:
-        # قراءة حجم الهيدر (8 بايت الأولى)
-        header_size_bytes = f.read(8)
-        if not header_size_bytes or len(header_size_bytes) < 8:
-            return None, None
+class TeacherAnalyzer:
+    def __init__(self, teacher_path):
+        self.teacher_path = teacher_path
+        self.buffer, self.header = self.load()
+        self.config = self.analyze()
+    
+    def load(self):
+        with open(self.teacher_path, "rb") as f:
+            header_size = struct.unpack("<Q", f.read(8))[0]
+            header = json.loads(f.read(header_size).decode("utf-8"))
+            data = f.read()
+        return data, header
+    
+    def get_tensor_raw(self, name):
+        if name not in self.header:
+            return None
+        info = self.header[name]
+        start, end = info["data_offsets"]
+        raw = self.buffer[start:end]
+        dtype = info.get("dtype", "F32")
+        shape = info["shape"]
         
-        header_size = struct.unpack("<Q", header_size_bytes)[0]
-        
-        # قراءة الهيدر JSON
-        header_json = f.read(header_size).decode("utf-8")
-        header = json.loads(header_json)
-        
-        # قراءة البيانات الخام
-        data_buffer = f.read()
+        if dtype == "BF16":
+            bits = np.frombuffer(raw, dtype=np.uint16)
+            return (bits.astype(np.uint32) << 16).view(np.float32).reshape(shape)
+        elif dtype == "F16":
+            return np.frombuffer(raw, dtype=np.float16).reshape(shape)
+        return np.frombuffer(raw, dtype=np.float32).reshape(shape)
     
-    return data_buffer, header
+    def get_tensor_info(self, name):
+        if name not in self.header:
+            return None
+        return self.header[name]
+    
+    def analyze(self):
+        config = {}
+        
+        # اكتشاف embedding
+        for emb_name in ["model.embed_tokens.weight", "transformer.wte.weight",
+                         "bert.embeddings.word_embeddings.weight", "gpt_neox.embed_in.weight"]:
+            info = self.get_tensor_info(emb_name)
+            if info:
+                config["teacher_vocab"] = info["shape"][0]
+                config["teacher_dim"] = info["shape"][1]
+                config["emb_name"] = emb_name
+                break
+        
+        if "teacher_dim" not in config:
+            raise ValueError("Cannot detect embedding layer!")
+        
+        # اكتشاف عدد الطبقات
+        num_layers = 0
+        layer_keys = set()
+        for key in self.header.keys():
+            for pattern in ["model.layers.", "transformer.h.", "bert.encoder.layer."]:
+                if pattern in key:
+                    parts = key.split(".")
+                    try:
+                        idx = parts.index(pattern.strip(".")) if pattern.strip(".") in parts else -1
+                        if idx == -1:
+                            # جرب النمط المباشر
+                            for p in ["layers", "h", "layer"]:
+                                if p in parts:
+                                    idx = parts.index(p) + 1
+                                    break
+                        if idx >= 0 and idx < len(parts):
+                            layer_num = int(parts[idx])
+                            layer_keys.add(layer_num)
+                    except:
+                        pass
+        
+        config["teacher_layers"] = max(layer_keys) + 1 if layer_keys else 12
+        config["layer_format"] = self.detect_layer_format()
+        
+        # اكتشاف n_heads
+        n_heads = None
+        for q_name in ["model.layers.0.self_attn.q_proj.weight",
+                       "transformer.h.0.attn.q_proj.weight"]:
+            info = self.get_tensor_info(q_name)
+            if info:
+                out_dim = info["shape"][0]
+                # جرب قواسم شائعة
+                for head_dim in [32, 64, 96, 128]:
+                    if out_dim % head_dim == 0:
+                        candidate = out_dim // head_dim
+                        if n_heads is None or candidate < n_heads:
+                            n_heads = candidate
+                break
+        
+        config["teacher_heads"] = n_heads or (config["teacher_dim"] // 64)
+        config["teacher_head_dim"] = config["teacher_dim"] // config["teacher_heads"]
+        
+        # اكتشاف intermediate_dim
+        for mlp_name in ["model.layers.0.mlp.up_proj.weight",
+                         "transformer.h.0.mlp.c_fc.weight",
+                         "model.layers.0.mlp.gate_proj.weight"]:
+            info = self.get_tensor_info(mlp_name)
+            if info:
+                config["teacher_intermediate"] = info["shape"][0]
+                break
+        
+        if "teacher_intermediate" not in config:
+            config["teacher_intermediate"] = config["teacher_dim"] * 4
+        
+        return config
+    
+    def detect_layer_format(self):
+        """يكتشف صيغة أسماء الطبقات"""
+        for key in self.header.keys():
+            if "model.layers.0.self_attn" in key:
+                return "llama"
+            if "transformer.h.0.attn" in key:
+                return "gpt2"
+            if "bert.encoder.layer.0" in key:
+                return "bert"
+        return "unknown"
+    
+    def get_layer_prefix(self, layer_idx):
+        """يرجع بادئة الطبقة حسب الصيغة"""
+        fmt = self.config["layer_format"]
+        if fmt == "llama":
+            return f"model.layers.{layer_idx}"
+        elif fmt == "gpt2":
+            return f"transformer.h.{layer_idx}"
+        elif fmt == "bert":
+            return f"bert.encoder.layer.{layer_idx}"
+        return f"model.layers.{layer_idx}"
 
 
-def get_tensor_raw(buffer, header, tensor_name):
-    """
-    استخراج تنسور من البيانات الخام.
-    يدعم التحويل من BF16 إلى Float32.
-    """
-    if buffer is None or header is None:
-        return None
+# ============================================================
+# 🧠 محول الأبعاد الذكي
+# ============================================================
+
+class SmartDimensionConverter:
+    """يحول الأوزان بين الأبعاد المختلفة بذكاء"""
     
-    if tensor_name not in header:
-        print(f"  ⚠️  Tensor '{tensor_name}' not found in teacher model")
-        return None
+    @staticmethod
+    def svd_project(weight, target_shape):
+        """استخدام SVD للإسقاط مع الحفاظ على المعلومات الأساسية"""
+        src_rows, src_cols = weight.shape
+        tgt_rows, tgt_cols = target_shape
+        
+        # SVD: W = U @ S @ V^T
+        try:
+            U, S, Vt = linalg.svd(weight.astype(np.float64), full_matrices=False)
+            
+            # إعادة بناء بالمكونات الرئيسية
+            k = min(tgt_rows, tgt_cols, len(S))
+            U_k = U[:, :k]
+            S_k = np.diag(np.sqrt(S[:k]))  # نأخذ الجذر التربيعي للتوزيع
+            Vt_k = Vt[:k, :]
+            
+            # بناء مصفوفتين: A بحجم [tgt_rows, k] و B بحجم [k, tgt_cols]
+            # بحيث A @ B ≈ W مع الأبعاد الجديدة
+            A = U_k @ S_k
+            B = S_k @ Vt_k
+            
+            # تغيير حجم A و B للأبعاد المطلوبة
+            A_resized = SmartDimensionConverter._resize_2d(A, (tgt_rows, k))
+            B_resized = SmartDimensionConverter._resize_2d(B, (k, tgt_cols))
+            
+            return (A_resized @ B_resized).astype(np.float32)
+        except:
+            return SmartDimensionConverter._resize_2d(weight, target_shape)
     
-    info = header[tensor_name]
-    start, end = info["data_offsets"]
-    raw_bytes = buffer[start:end]
+    @staticmethod
+    def pca_align(source, target_shape):
+        """محاذاة الأبعاد باستخدام PCA"""
+        src_rows, src_cols = source.shape
+        tgt_rows, tgt_cols = target_shape
+        
+        # توسيع أو تقليص الصفوف
+        if tgt_rows != src_rows:
+            # استخدام PCA لتقليص/توسيع البعد
+            cov = source @ source.T
+            eigenvalues, eigenvectors = linalg.eigh(cov)
+            
+            # أخذ المكونات الرئيسية
+            if tgt_rows < src_rows:
+                # تقليص: أخذ أكبر المكونات
+                idx = np.argsort(eigenvalues)[-tgt_rows:]
+                eigenvectors = eigenvectors[:, idx]
+                result = eigenvectors.T @ source
+            else:
+                # توسيع: إضافة مكونات عشوائية صغيرة
+                result = np.zeros((tgt_rows, src_cols), dtype=np.float32)
+                result[:src_rows, :] = source
+                result[src_rows:, :] = np.random.normal(0, 0.001, (tgt_rows - src_rows, src_cols))
+                return result
+        else:
+            result = source.copy()
+        
+        # توسيع أو تقليص الأعمدة
+        if tgt_cols != src_cols:
+            result = SmartDimensionConverter._resize_2d(result, (tgt_rows, tgt_cols))
+        
+        return result
     
-    # تحديد نوع البيانات
-    dtype = info.get("dtype", "F32")
-    
-    if dtype == "BF16":
-        # تحويل BF16 (uint16) إلى Float32
-        raw_bits = np.frombuffer(raw_bytes, dtype=np.uint16)
-        # BF16 إلى F32: إزاحة 16 بت لليسار
-        return (raw_bits.astype(np.uint32) << 16).view(np.float32).reshape(info["shape"])
-    elif dtype == "F16":
-        return np.frombuffer(raw_bytes, dtype=np.float16).reshape(info["shape"])
-    elif dtype == "F32":
-        return np.frombuffer(raw_bytes, dtype=np.float32).reshape(info["shape"])
-    else:
-        print(f"  ⚠️  Unknown dtype '{dtype}' for '{tensor_name}', trying F32")
-        return np.frombuffer(raw_bytes, dtype=np.float32).reshape(info["shape"])
+    @staticmethod
+    def _resize_2d(source, target_shape):
+        """تغيير حجم مصفوفة ثنائية الأبعاد"""
+        target = np.zeros(target_shape, dtype=np.float32)
+        copy_0 = min(source.shape[0], target_shape[0])
+        copy_1 = min(source.shape[1], target_shape[1])
+        target[:copy_0, :copy_1] = source[:copy_0, :copy_1]
+        
+        # ملء الفراغات بقيم صغيرة جداً
+        if target_shape[0] > source.shape[0]:
+            target[source.shape[0]:, :] = np.random.normal(0, 0.0001, 
+                (target_shape[0] - source.shape[0], target_shape[1]))
+        if target_shape[1] > source.shape[1]:
+            target[:, source.shape[1]:] = np.random.normal(0, 0.0001,
+                (target_shape[0], target_shape[1] - source.shape[1]))
+        
+        return target
 
 
-def smart_resize(source_tensor, target_shape, tensor_name=""):
-    """
-    تغيير حجم تنسور معلم ليطابق أبعاد Zumar.
-    إذا كان المصدر None، يُنشئ تهيئة عشوائية صغيرة.
-    """
-    if source_tensor is None:
-        print(f"    📋 Initializing '{tensor_name}' randomly (shape: {target_shape})")
-        return (np.random.normal(0, 0.01, target_shape)).astype(np.float32)
-    
-    target = np.zeros(target_shape, dtype=np.float32)
-    s_shape = source_tensor.shape
-    
-    if len(target_shape) == 2:
-        # مصفوفة ثنائية الأبعاد
-        copy_0 = min(s_shape[0], target_shape[0])
-        copy_1 = min(s_shape[1], target_shape[1])
-        target[:copy_0, :copy_1] = source_tensor[:copy_0, :copy_1]
+# ============================================================
+# 🚀 نظام التقطير الذكي
+# ============================================================
+
+class IntelligentDistiller:
+    def __init__(self, teacher_path):
+        self.teacher = TeacherAnalyzer(teacher_path)
+        self.zumar = ZUMAR_CONFIG
+        self.converter = SmartDimensionConverter()
         
-        # إذا كان هناك أعمدة إضافية، نُهيئها بقيم صغيرة
-        if target_shape[1] > s_shape[1]:
-            target[:, s_shape[1]:] = np.random.normal(0, 0.001, (target_shape[0], target_shape[1] - s_shape[1]))
-        if target_shape[0] > s_shape[0]:
-            target[s_shape[0]:, :] = np.random.normal(0, 0.001, (target_shape[0] - s_shape[0], target_shape[1]))
-    else:
-        # متجه أحادي البعد
-        copy_0 = min(s_shape[0], target_shape[0])
-        target[:copy_0] = source_tensor[:copy_0]
-        if target_shape[0] > s_shape[0]:
-            target[s_shape[0]:] = np.random.normal(0, 0.001, (target_shape[0] - s_shape[0],))
+        print(f"""
+╔══════════════════════════════════════════════╗
+║  🧬 ZUMAR INTELLIGENT DISTILLER v5.0       ║
+╠══════════════════════════════════════════════╣
+║  Teacher: {self.teacher.config.get('teacher_dim', '?'):>4}d, {self.teacher.config.get('teacher_layers', '?'):>2}L, {self.teacher.config.get('teacher_heads', '?'):>2}h
+║  Zumar:   {self.zumar['hidden_dim']:>4}d, {self.zumar['num_layers']:>2}L, {self.zumar['n_heads']:>2}h
+╚══════════════════════════════════════════════╝
+""")
     
-    return target
+    def convert_embedding(self):
+        """تحويل تضمين المفردات بذكاء"""
+        emb = self.teacher.get_tensor_raw(self.teacher.config["emb_name"])
+        if emb is None:
+            raise ValueError("Cannot load teacher embedding")
+        
+        teacher_vocab, teacher_dim = emb.shape
+        target_vocab, target_dim = self.zumar["vocab_size"], self.zumar["hidden_dim"]
+        
+        print(f"📥 Embedding: {teacher_vocab}x{teacher_dim} → {target_vocab}x{target_dim}")
+        
+        if teacher_dim != target_dim:
+            # تحويل الأبعاد باستخدام SVD
+            print("   🔄 Using SVD projection for dimension conversion...")
+            result = self.converter.svd_project(emb.T, (target_dim, teacher_vocab)).T
+        else:
+            result = emb.copy()
+        
+        # تغيير حجم المفردات
+        if target_vocab != teacher_vocab:
+            final = np.zeros((target_vocab, target_dim), dtype=np.float32)
+            copy_size = min(teacher_vocab, target_vocab)
+            final[:copy_size, :] = result[:copy_size, :]
+            
+            # للمفردات الجديدة: استخدم متوسط التضمينات الموجودة
+            if target_vocab > teacher_vocab:
+                mean_emb = result.mean(axis=0)
+                for i in range(teacher_vocab, target_vocab):
+                    final[i, :] = mean_emb + np.random.normal(0, 0.001, target_dim)
+            
+            result = final
+        
+        print(f"   ✅ Done: {result.shape}")
+        return result.astype(np.float16)
+    
+    def convert_attention_weights(self, src_layer, teacher_heads):
+        """تحويل أوزان الانتباه مع تغيير عدد الرؤوس"""
+        target_dim = self.zumar["hidden_dim"]
+        target_heads = self.zumar["n_heads"]
+        teacher_dim = self.teacher.config["teacher_dim"]
+        
+        weights = {}
+        
+        # جلب أوزان Q, K, V, O
+        for proj in ["q_proj", "k_proj", "v_proj", "o_proj"]:
+            fmt = self.teacher.config["layer_format"]
+            
+            # جلب الوزن من المعلم
+            if fmt == "llama":
+                w = self.teacher.get_tensor_raw(f"{src_layer}.self_attn.{proj}.weight")
+            elif fmt == "gpt2":
+                if proj in ["q_proj", "k_proj", "v_proj"]:
+                    w_full = self.teacher.get_tensor_raw(f"{src_layer}.attn.c_attn.weight")
+                    if w_full is not None:
+                        h = w_full.shape[1] // 3
+                        if proj == "q_proj":
+                            w = w_full[:, :h]
+                        elif proj == "k_proj":
+                            w = w_full[:, h:2*h]
+                        else:
+                            w = w_full[:, 2*h:]
+                    else:
+                        w = None
+                else:
+                    w = self.teacher.get_tensor_raw(f"{src_layer}.attn.c_proj.weight")
+            else:
+                w = None
+            
+            if w is None:
+                # تهيئة عشوائية ذكية
+                print(f"   📋 Random init: {proj}")
+                w = np.random.normal(0, 0.02, (teacher_dim, teacher_dim)).astype(np.float32)
+            
+            # تحويل الأبعاد
+            if w.shape[0] != target_dim or w.shape[1] != target_dim:
+                w = self.converter.svd_project(w, (target_dim, target_dim))
+            
+            weights[f"self_attn.{proj}.weight"] = w.astype(np.float16)
+            weights[f"self_attn.{proj}.bias"] = np.zeros(target_dim, dtype=np.float16)
+        
+        return weights
+    
+    def convert_moe_weights(self, src_layer):
+        """تحويل أوزان MoE بذكاء"""
+        target_dim = self.zumar["hidden_dim"]
+        num_experts = self.zumar["num_experts"]
+        teacher_intermediate = self.teacher.config.get("teacher_intermediate", target_dim * 4)
+        
+        weights = {}
+        fmt = self.teacher.config["layer_format"]
+        
+        # جلب أوزان MLP من المعلم
+        if fmt == "llama":
+            gate_w = self.teacher.get_tensor_raw(f"{src_layer}.mlp.gate_proj.weight")
+            up_w = self.teacher.get_tensor_raw(f"{src_layer}.mlp.up_proj.weight")
+            down_w = self.teacher.get_tensor_raw(f"{src_layer}.mlp.down_proj.weight")
+        elif fmt == "gpt2":
+            gate_w = self.teacher.get_tensor_raw(f"{src_layer}.mlp.c_fc.weight")
+            up_w = gate_w  # GPT-2 يدمجهم
+            down_w = self.teacher.get_tensor_raw(f"{src_layer}.mlp.c_proj.weight")
+        else:
+            gate_w = up_w = down_w = None
+        
+        # تحويل gate
+        gate_target = (num_experts, target_dim)
+        if gate_w is not None:
+            gate_w = self.converter.svd_project(gate_w, gate_target)
+        else:
+            gate_w = np.random.normal(0, 0.02, gate_target).astype(np.float32)
+        weights["mlp.gate.weight"] = gate_w.astype(np.float16)
+        weights["mlp.gate.bias"] = np.zeros(num_experts, dtype=np.float16)
+        
+        # تحويل الخبراء
+        expert_target = (target_dim, target_dim)
+        if up_w is not None:
+            # تحويل up_proj ليكون expert
+            base_expert = self.converter.svd_project(up_w, expert_target)
+        else:
+            base_expert = np.random.normal(0, 0.02, expert_target).astype(np.float32)
+        
+        # لكل خبير، نسخة معدلة قليلاً
+        for e in range(num_experts):
+            noise = np.random.normal(0, 0.0001, expert_target)
+            expert_w = (base_expert + noise).clip(-3, 3).astype(np.float16)
+            weights[f"mlp.expert_{e}.weight"] = expert_w
+            weights[f"mlp.expert_{e}.bias"] = np.zeros(target_dim, dtype=np.float16)
+        
+        return weights
+    
+    def convert_layernorm(self, src_layer):
+        """تحويل LayerNorm"""
+        target_dim = self.zumar["hidden_dim"]
+        weights = {}
+        fmt = self.teacher.config["layer_format"]
+        
+        norm_mapping = {
+            "llama": [("input_layernorm", "input_layernorm"),
+                      ("post_attention_layernorm", "post_attention_layernorm")],
+            "gpt2": [("ln_1", "input_layernorm"),
+                     ("ln_2", "post_attention_layernorm")],
+        }
+        
+        mapping = norm_mapping.get(fmt, norm_mapping["llama"])
+        
+        for teacher_norm, zumar_norm in mapping:
+            w = self.teacher.get_tensor_raw(f"{src_layer}.{teacher_norm}.weight")
+            if w is not None:
+                # LayerNorm بسيط: مجرد scale و bias
+                result = np.ones(target_dim, dtype=np.float32)
+                copy_size = min(len(w), target_dim)
+                result[:copy_size] = w[:copy_size]
+                weights[f"{zumar_norm}.weight"] = result.astype(np.float16)
+                weights[f"{zumar_norm}.bias"] = np.zeros(target_dim, dtype=np.float16)
+        
+        return weights
+    
+    def distill(self):
+        """عملية التقطير الكاملة"""
+        weights = {}
+        
+        # 1. Embedding
+        print("\n🧬 Phase 1: Converting Embedding...")
+        emb = self.convert_embedding()
+        weights["model.embed_tokens.weight"] = emb
+        weights["lm_head.weight"] = emb.copy()
+        weights["lm_head.bias"] = np.zeros(self.zumar["vocab_size"], dtype=np.float16)
+        
+        # 2. Final LayerNorm
+        print("\n📏 Phase 2: Final LayerNorm...")
+        weights["model.norm.weight"] = np.ones(self.zumar["hidden_dim"], dtype=np.float16)
+        weights["model.norm.bias"] = np.zeros(self.zumar["hidden_dim"], dtype=np.float16)
+        
+        # 3. Layers
+        teacher_layers = self.teacher.config["teacher_layers"]
+        zumar_layers = self.zumar["num_layers"]
+        teacher_heads = self.teacher.config["teacher_heads"]
+        
+        print(f"\n🧠 Phase 3: Converting {zumar_layers} layers...")
+        for i in range(zumar_layers):
+            # اختيار طبقة المعلم (مع تدوير إذا لزم)
+            teacher_idx = i % teacher_layers
+            src = self.teacher.get_layer_prefix(teacher_idx)
+            dest = f"model.layers.{i}"
+            
+            # Attention
+            attn_weights = self.convert_attention_weights(src, teacher_heads)
+            for k, v in attn_weights.items():
+                weights[f"{dest}.{k}"] = v
+            
+            # MoE
+            moe_weights = self.convert_moe_weights(src)
+            for k, v in moe_weights.items():
+                weights[f"{dest}.{k}"] = v
+            
+            # LayerNorm
+            norm_weights = self.convert_layernorm(src)
+            for k, v in norm_weights.items():
+                weights[f"{dest}.{k}"] = v
+            
+            if i % 5 == 0:
+                print(f"   ✅ Layer {i}/{zumar_layers}")
+        
+        return weights
+    
+    def save(self, weights, output_path):
+        """حفظ الأوزان"""
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        print(f"\n💾 Saving {len(weights)} tensors...")
+        save_file(weights, str(output_path))
+        
+        total_params = sum(np.prod(v.shape) for v in weights.values())
+        size_gb = total_params * 2 / 1e9
+        print(f"\n📊 Total Parameters: {total_params:,}")
+        print(f"📊 Estimated Size: {size_gb:.2f} GB (FP16)")
+        print(f"\n🚀 Distillation Complete!")
 
 
-def create_mamba_weights(src_prefix, dest_prefix, buffer, header):
-    """
-    إنشاء أوزان طبقة Mamba من أوزان الانتباه للمعلم.
-    
-    هيكل Mamba في Zumar:
-    - in_proj: [4096, 1024] (مضاعف بمقدار expand*2 = 4)
-    - x_proj: [2080, 2048] (d_state*2 + d_inner = 16*2 + 2048)
-    - dt_proj: [2048, 2048]
-    - out_proj: [1024, 2048]
-    - conv1d: [2048, 1, 4]
-    - a_log: [16, 2048]
-    - d: [2048]
-    """
-    weights = {}
-    d_inner = INPUT_DIM * 2  # 2048
-    d_state = 16
-    
-    # in_proj: دمج q_proj و k_proj من المعلم
-    q_w = get_tensor_raw(buffer, header, f"{src_prefix}self_attn.q_proj.weight")
-    k_w = get_tensor_raw(buffer, header, f"{src_prefix}self_attn.k_proj.weight")
-    v_w = get_tensor_raw(buffer, header, f"{src_prefix}self_attn.v_proj.weight")
-    
-    # in_proj ينتج 4096 (2048 للمسار + 2048 للبوابة)
-    in_proj_weight = np.zeros((d_inner * 2, INPUT_DIM), dtype=np.float32)
-    if q_w is not None:
-        in_proj_weight[:d_inner, :] = smart_resize(q_w, (d_inner, INPUT_DIM))
-    if k_w is not None:
-        in_proj_weight[d_inner:, :] = smart_resize(k_w, (d_inner, INPUT_DIM))
-    
-    weights[f"{dest_prefix}self_attn.in_proj.weight"] = in_proj_weight.astype(np.float16)
-    weights[f"{dest_prefix}self_attn.in_proj.bias"] = np.zeros((d_inner * 2,), dtype=np.float16)
-    
-    # x_proj: [d_state*2 + d_inner, d_inner] = [32 + 2048, 2048] = [2080, 2048]
-    weights[f"{dest_prefix}self_attn.x_proj.weight"] = (
-        np.random.randn(d_state * 2 + d_inner, d_inner) * 0.001
-    ).astype(np.float16)
-    weights[f"{dest_prefix}self_attn.x_proj.bias"] = np.zeros((d_state * 2 + d_inner,), dtype=np.float16)
-    
-    # dt_proj: [d_inner, d_inner] = [2048, 2048]
-    weights[f"{dest_prefix}self_attn.dt_proj.weight"] = (
-        np.random.randn(d_inner, d_inner) * 0.001
-    ).astype(np.float16)
-    weights[f"{dest_prefix}self_attn.dt_proj.bias"] = np.zeros((d_inner,), dtype=np.float16)
-    
-    # out_proj: من o_proj للمعلم
-    o_w = get_tensor_raw(buffer, header, f"{src_prefix}self_attn.o_proj.weight")
-    weights[f"{dest_prefix}self_attn.out_proj.weight"] = smart_resize(
-        o_w, (INPUT_DIM, d_inner), f"out_proj"
-    ).astype(np.float16)
-    weights[f"{dest_prefix}self_attn.out_proj.bias"] = np.zeros((INPUT_DIM,), dtype=np.float16)
-    
-    # conv1d: [d_inner, 1, d_conv] = [2048, 1, 4]
-    weights[f"{dest_prefix}self_attn.conv1d.weight"] = (
-        np.random.randn(d_inner, 1, 4) * 0.01
-    ).astype(np.float16)
-    weights[f"{dest_prefix}self_attn.conv1d.bias"] = np.zeros((d_inner,), dtype=np.float16)
-    
-    # a_log: [d_state, d_inner] = [16, 2048] - مهيأة بقيم سالبة صغيرة
-    weights[f"{dest_prefix}self_attn.a_log"] = (
-        np.ones((d_state, d_inner)) * -0.5
-    ).astype(np.float16)
-    
-    # d: [d_inner] = [2048]
-    weights[f"{dest_prefix}self_attn.d"] = np.ones((d_inner,), dtype=np.float16)
-    
-    return weights
+# ============================================================
+# 🚀 المدخل الرئيسي
+# ============================================================
 
-
-def create_moe_weights(src_prefix, dest_prefix, buffer, header):
-    """
-    إنشاء أوزان MoE من طبقة MLP للمعلم.
+def main():
+    base_dir = Path(__file__).parent.parent.parent
+    teacher_path = base_dir / "models" / "teacher" / "model.safetensors"
+    output_path = base_dir / "models" / "zumar-v1" / "model.safetensors"
     
-    هيكل MoE في Zumar:
-    - gate: [NUM_EXPERTS, INPUT_DIM] = [8, 1024]
-    - expert_i: [INPUT_DIM, INPUT_DIM] = [1024, 1024] (لكل خبير)
-    """
-    weights = {}
+    if not teacher_path.exists():
+        print(f"❌ Teacher model not found: {teacher_path}")
+        print("💡 Place your model at: models/teacher/model.safetensors")
+        return 1
     
-    # gate: من gate_proj للمعلم
-    gate_w = get_tensor_raw(buffer, header, f"{src_prefix}mlp.gate_proj.weight")
-    weights[f"{dest_prefix}mlp.gate.weight"] = smart_resize(
-        gate_w, (NUM_EXPERTS, INPUT_DIM), "moegate"
-    ).astype(np.float16)
-    weights[f"{dest_prefix}mlp.gate.bias"] = np.zeros((NUM_EXPERTS,), dtype=np.float16)
+    distiller = IntelligentDistiller(str(teacher_path))
+    weights = distiller.distill()
+    distiller.save(weights, str(output_path))
     
-    # كل خبير يحصل على نسخة مشوشة قليلاً من أوزان المعلم
-    up_w = get_tensor_raw(buffer, header, f"{src_prefix}mlp.up_proj.weight")
-    down_w = get_tensor_raw(buffer, header, f"{src_prefix}mlp.down_proj.weight")
+    # حفظ إعدادات Zumar للمرجع
+    config_path = output_path.parent / "zumar_config.json"
+    with open(config_path, "w") as f:
+        json.dump(ZUMAR_CONFIG, f, indent=2)
+    print(f"📝 Config saved to: {config_path}")
     
-    # استخدام up_proj كأساس للخبراء
-    base_expert = smart_resize(up_w, (INPUT_DIM, INPUT_DIM), "expert_base")
-    
-    for e in range(NUM_EXPERTS):
-        # إضافة ضوضاء صغيرة لكل خبير لتمييزهم
-        noise = np.random.normal(0, 0.0001, (INPUT_DIM, INPUT_DIM))
-        expert_weight = (base_expert + noise).astype(np.float16)
-        weights[f"{dest_prefix}mlp.expert_{e}.weight"] = expert_weight
-        weights[f"{dest_prefix}mlp.expert_{e}.bias"] = np.zeros((INPUT_DIM,), dtype=np.float16)
-    
-    return weights
-
-
-def run_distillation():
-    """
-    عملية التقطير الرئيسية:
-    1. تحميل نموذج المعلم
-    2. استخراج الأوزان وتحويلها لهيكل ZumarModel
-    3. حفظ الملف النهائي
-    """
-    # إنشاء مجلد الهدف
-    os.makedirs(TARGET_DIR, exist_ok=True)
-    
-    # التحقق من وجود المعلم
-    if not os.path.exists(SOURCE_FILE):
-        print(f"❌ Teacher model missing at: {SOURCE_FILE}")
-        print("💡 Please place your teacher model (model.safetensors) in models/teacher/")
-        return False
-    
-    print("=" * 60)
-    print("🧬 ZUMAR KNOWLEDGE DISTILLATION v3.0")
-    print("=" * 60)
-    print(f"📂 Teacher: {SOURCE_FILE}")
-    print(f"📂 Target:  {OUTPUT_FILE}")
-    print(f"📊 Config:  {NUM_LAYERS} layers, {INPUT_DIM} dim, {NUM_EXPERTS} experts")
-    print("-" * 60)
-    
-    # تحميل المعلم
-    buffer, header = load_safetensors_manually(SOURCE_FILE)
-    if buffer is None:
-        print("❌ Failed to load teacher model!")
-        return False
-    
-    print(f"✅ Teacher loaded: {len(header)} tensors found")
-    
-    # اكتشاف عدد طبقات المعلم
-    teacher_layers = 0
-    for key in header.keys():
-        if key.startswith("model.layers."):
-            layer_num = int(key.split(".")[2])
-            teacher_layers = max(teacher_layers, layer_num + 1)
-    print(f"📊 Teacher has {teacher_layers} layers")
-    
-    # --- بناء أوزان Zumar ---
-    weights = {}
-    
-    # 1. التضمين (Embedding)
-    print("\n📥 Extracting Embeddings...")
-    emb = get_tensor_raw(buffer, header, "model.embed_tokens.weight")
-    final_emb = smart_resize(emb, (VOCAB_SIZE, INPUT_DIM), "embed_tokens").astype(np.float16)
-    weights["model.embed_tokens.weight"] = final_emb
-    
-    # 2. رأس اللغة (LM Head) - مشارك مع التضمين
-    weights["lm_head.weight"] = final_emb.copy()
-    weights["lm_head.bias"] = np.zeros((VOCAB_SIZE,), dtype=np.float16)
-    
-    # 3. معيار الطبقة النهائية (Final LayerNorm)
-    print("📥 Extracting Final Norm...")
-    norm_w = get_tensor_raw(buffer, header, "model.norm.weight")
-    weights["model.norm.weight"] = smart_resize(norm_w, (INPUT_DIM,), "final_norm").astype(np.float16)
-    weights["model.norm.bias"] = np.zeros((INPUT_DIM,), dtype=np.float16)
-    
-    # 4. الطبقات (Layers)
-    print(f"\n📥 Distilling {NUM_LAYERS} layers...")
-    for i in range(NUM_LAYERS):
-        # تدوير عبر طبقات المعلم إذا كان عدد طبقات Zumar أكبر
-        src_idx = i % teacher_layers
-        src_p = f"model.layers.{src_idx}."
-        dest_p = f"model.layers.{i}."
-        
-        print(f"  🔄 Layer {i} (from teacher layer {src_idx})")
-        
-        # --- Mamba Weights ---
-        mamba_weights = create_mamba_weights(src_p, dest_p, buffer, header)
-        weights.update(mamba_weights)
-        
-        # --- MoE Weights ---
-        moe_weights = create_moe_weights(src_p, dest_p, buffer, header)
-        weights.update(moe_weights)
-        
-        # --- LayerNorm Weights ---
-        # input_layernorm
-        in_norm = get_tensor_raw(buffer, header, f"{src_p}input_layernorm.weight")
-        weights[f"{dest_p}input_layernorm.weight"] = smart_resize(
-            in_norm, (INPUT_DIM,), f"layer{i}_in_norm"
-        ).astype(np.float16)
-        weights[f"{dest_p}input_layernorm.bias"] = np.zeros((INPUT_DIM,), dtype=np.float16)
-        
-        # post_attention_layernorm
-        post_norm = get_tensor_raw(buffer, header, f"{src_p}post_attention_layernorm.weight")
-        weights[f"{dest_p}post_attention_layernorm.weight"] = smart_resize(
-            post_norm, (INPUT_DIM,), f"layer{i}_post_norm"
-        ).astype(np.float16)
-        weights[f"{dest_p}post_attention_layernorm.bias"] = np.zeros((INPUT_DIM,), dtype=np.float16)
-        
-        if i % 5 == 0 or i == NUM_LAYERS - 1:
-            print(f"  ✅ Layer {i} complete")
-    
-    # --- حفظ الملف ---
-    print(f"\n💾 Saving {len(weights)} tensors to safetensors...")
-    
-    try:
-        save_file(weights, OUTPUT_FILE)
-        print(f"✅ Successfully saved to: {OUTPUT_FILE}")
-        
-        # طباعة ملخص
-        total_params = 0
-        for key, val in weights.items():
-            params = int(np.prod(val.shape))
-            total_params += params
-            if "weight" in key and "layer" not in key:
-                print(f"  📦 {key}: {val.shape} ({params:,} params)")
-        
-        print(f"\n📊 Total parameters: {total_params:,}")
-        print("🚀 Zumar Brain is ready for inference!")
-        return True
-        
-    except Exception as e:
-        print(f"❌ Error saving safetensors: {e}")
-        return False
-
+    return 0
 
 if __name__ == "__main__":
-    success = run_distillation()
-    if not success:
-        exit(1)
+    exit(main())

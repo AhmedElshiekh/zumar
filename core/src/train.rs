@@ -1,21 +1,28 @@
-use candle_core::{Tensor, Result, Device, Var};
-use candle_nn::{Optimizer, AdamW, ParamsAdamW};
+use candle_core::{Result, Device};
+use candle_nn::VarMap;
+use crate::layers::ZumarModel;
+use crate::data::TrainingData;
+use crate::distill::{Distiller, DistillConfig};
 
-pub struct ZumarTrainer {
-    optimizer: AdamW,
-}
-
-impl ZumarTrainer {
-    pub fn new(vars: Vec<Var>) -> Result<Self> {
-        // إعداد المحسن (Optimizer) - AdamW هو الأفضل لتدريب الـ Transformers
-        let params = ParamsAdamW::default();
-        let optimizer = AdamW::new(vars, params)?;
-        Ok(Self { optimizer })
-    }
-
-    pub fn train_step(&mut self, loss: &Tensor) -> Result<()> {
-        // 1. حساب الاشتقاقات (Backpropagation)
-        self.optimizer.backward_step(loss)?;
-        Ok(())
-    }
+pub fn run_training(
+    model: &mut ZumarModel,
+    varmap: &VarMap,
+    device: &Device,
+    data_path: Option<&str>,
+    epochs: usize,
+) -> Result<()> {
+    println!("============================================================");
+    println!("🧬 ZUMAR TRAINING (Python-compatible style)");
+    println!("============================================================");
+    
+    let training_data = TrainingData::load(data_path);
+    let all_texts = training_data.repeat(10);
+    
+    println!("📊 {} texts", all_texts.len());
+    
+    let config = DistillConfig { epochs, learning_rate: 0.001 };
+    let distiller = Distiller::new(config, device.clone());
+    distiller.distill(model, varmap, &all_texts)?;
+    
+    Ok(())
 }

@@ -2,19 +2,22 @@ pub mod bitlinear;
 pub mod moe;
 pub mod mamba;
 pub mod attention;
+pub mod snn;
 
-use crate::layers::bitlinear::ZumarBitLinear;
 use crate::layers::moe::ZumarMoE;
-use crate::layers::mamba::{ZumarMambaBlock, ZumarMambaConfig};
 use crate::layers::attention::ZumarFlashAttention;
 use candle_core::{Tensor, Result, Device};
-use candle_nn::{Module, VarBuilder, Embedding, LayerNorm};
+use candle_nn::{Module, VarBuilder, Embedding, LayerNorm, Linear};
 
+/// كتلة Zumar بسيطة: Attention + MoE
 pub struct ZumarBlock {
     pub pre_norm: LayerNorm,
-    pub mamba_layer: ZumarMambaBlock,
+    pub q_proj: Linear,
+    pub k_proj: Linear,
+    pub v_proj: Linear,
+    pub o_proj: Linear,
     pub attention: ZumarFlashAttention,
-    pub moe_layer: ZumarMoE,
+    pub moe: ZumarMoE,
     pub post_norm: LayerNorm,
 }
 
@@ -22,7 +25,9 @@ pub struct ZumarModel {
     pub embedding: Embedding,
     pub layers: Vec<ZumarBlock>,
     pub final_norm: LayerNorm,
-    pub lm_head: ZumarBitLinear,
+    pub lm_head: Linear,
+    pub hidden_size: usize,
+    pub vocab_size: usize,
 }
 
 impl ZumarBlock {
@@ -30,27 +35,33 @@ impl ZumarBlock {
         in_dim: usize, num_experts: usize, top_k: usize, n_heads: usize, vs: VarBuilder,
     ) -> Result<Self> {
         let pre_norm = candle_nn::layer_norm(in_dim, 1e-5, vs.pp("input_layernorm"))?;
-        let mamba_cfg = ZumarMambaConfig { d_model: in_dim, d_state: 16, d_conv: 4, expand: 2 };
-        let mamba_layer = ZumarMambaBlock::new(&mamba_cfg, vs.pp("self_attn"))?;
-        let head_dim = in_dim / n_heads;
-        let attention = ZumarFlashAttention::new(n_heads, head_dim);
-        let moe_layer = ZumarMoE::new(in_dim, num_experts, top_k, vs.pp("mlp"))?;
+        let q_proj = candle_nn::linear(in_dim, in_dim, vs.pp("self_attn.q_proj"))?;
+        let k_proj = candle_nn::linear(in_dim, in_dim, vs.pp("self_attn.k_proj"))?;
+        let v_proj = candle_nn::linear(in_dim, in_dim, vs.pp("self_attn.v_proj"))?;
+        let o_proj = candle_nn::linear(in_dim, in_dim, vs.pp("self_attn.o_proj"))?;
+        let attention = ZumarFlashAttention::new(n_heads, in_dim / n_heads);
+        let moe = ZumarMoE::new(in_dim, num_experts, top_k, vs.pp("mlp"))?;
         let post_norm = candle_nn::layer_norm(in_dim, 1e-5, vs.pp("post_attention_layernorm"))?;
-        Ok(Self { pre_norm, mamba_layer, attention, moe_layer, post_norm })
+        Ok(Self { pre_norm, q_proj, k_proj, v_proj, o_proj, attention, moe, post_norm })
     }
 
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
         let residual = x.clone();
         let normed = self.pre_norm.forward(x)?;
-        let mamba_out = self.mamba_layer.forward(&normed)?;
-        let x = (residual + mamba_out)?;
+        
+        let q = self.q_proj.forward(&normed)?;
+        let k = self.k_proj.forward(&normed)?;
+        let v = self.v_proj.forward(&normed)?;
+        let attn_out = self.attention.forward(&q, &k, &v)?;
+        let attn_out = self.o_proj.forward(&attn_out)?;
+        
+        let x = (residual + attn_out)?;
         
         let residual_2 = x.clone();
         let normed_2 = self.post_norm.forward(&x)?;
-        let moe_out = self.moe_layer.forward(&normed_2)?;
-        let x = (residual_2 + moe_out)?;
+        let moe_out = self.moe.forward(&normed_2)?;
         
-        Ok(x)
+        residual_2 + moe_out
     }
 }
 
@@ -66,8 +77,8 @@ impl ZumarModel {
             layers.push(ZumarBlock::new(in_dim, num_experts, top_k, n_heads, layer_vs)?);
         }
         let final_norm = candle_nn::layer_norm(in_dim, 1e-5, vs.pp("model.norm"))?;
-        let lm_head = ZumarBitLinear::new(in_dim, vocab_size, vs.pp("lm_head"))?;
-        Ok(Self { embedding, layers, final_norm, lm_head })
+        let lm_head = candle_nn::linear(in_dim, vocab_size, vs.pp("lm_head"))?;
+        Ok(Self { embedding, layers, final_norm, lm_head, hidden_size: in_dim, vocab_size })
     }
 
     pub fn embed(&self, token_id: u32, device: &Device) -> Result<Tensor> {
@@ -76,10 +87,16 @@ impl ZumarModel {
         emb.unsqueeze(0)
     }
 
+    pub fn embed_tokens(&self, token_ids: &[u32], device: &Device) -> Result<Tensor> {
+        let input = Tensor::new(token_ids, device)?;
+        let emb = self.embedding.forward(&input)?;
+        emb.unsqueeze(0)
+    }
+
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
         let x = if x.rank() == 2 { x.unsqueeze(0)? } else { x.clone() };
         let mut hidden_states = x;
-        for (i, layer) in self.layers.iter().enumerate() {
+        for layer in &self.layers {
             hidden_states = layer.forward(&hidden_states)?;
         }
         hidden_states = self.final_norm.forward(&hidden_states)?;

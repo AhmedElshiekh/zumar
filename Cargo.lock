@@ -682,6 +682,7 @@ dependencies = [
  "openblas-src",
  "safetensors 0.5.3",
  "serde",
+ "serde_json",
  "tokenizers",
  "tokio",
 ]

@@ -83,5 +83,24 @@
 * **Deployment:** Cross-platform (Android, Linux, Windows, macOS).
 
 ---
+### التشغيل 
+```bash
+# تقطير كل النماذج في teacher/ (50 epoch)
+cargo run -p core --release -- distill 50
+
+# تدريب ذاتي
+cargo run -p core --release -- train 10
+
+# محادثة
+cargo run -p core --release
+
+# مساعدة
+cargo run -p core --release -- help
+
+# للتشغيل مع cpu & blas
+RUSTFLAGS="-C target-cpu=native" cargo run -p core --release --features blas 
+```
+
+---
 
 > **Guiding Principle:** "Absolute Intelligence. Zero Footprint. Total Sovereignty."

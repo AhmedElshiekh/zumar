@@ -1,0 +1,9 @@
+{
+  "vocab_size": 50257,
+  "hidden_dim": 1024,
+  "num_layers": 12,
+  "num_experts": 8,
+  "top_k": 2,
+  "n_heads": 16,
+  "head_dim": 64
+}
