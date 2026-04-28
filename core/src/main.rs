@@ -127,7 +127,7 @@ async fn main() -> Result<()> {
                     ZumarModel::new(vocab_size, hidden_size, num_layers, num_experts, top_k, n_heads, vs.clone())?
                 };
                 
-                let training_data = data::TrainingData::load(None);
+                let training_data = data::TrainingData::load(args.get(3).map(|s| s.as_str()));
                 let all_texts = training_data.repeat(10);
                 let mut all_ok = true;
                 

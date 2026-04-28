@@ -209,3 +209,25 @@ Usage:
    ⚡ Lazy mode: loads 1 layer at a time
 
   ✅ Ep 1: Loss 0.0000 | 210.7s
+
+  ✅ Ep 2: Loss 0.0000 | 430.3s
+
+  ✅ Ep 3: Loss 0.0000 | 648.8s
+
+  ✅ Ep 4: Loss 0.0000 | 861.6s
+
+  ✅ Ep 5: Loss 0.0000 | 1044.5s
+
+  ✅ Ep 6: Loss 0.0000 | 1233.3s
+
+  ✅ Ep 7: Loss 0.0000 | 1414.2s
+
+  ✅ Ep 8: Loss 0.0000 | 1598.3s
+
+  ✅ Ep 9: Loss 0.0000 | 1800.2s
+
+  ✅ Ep 10: Loss 0.0000 | 1992.4s
+
+  ✅ Ep 11: Loss 0.0000 | 2215.8s
+
+  ✅ Ep 12: Loss 0.0000 | 2423.8s

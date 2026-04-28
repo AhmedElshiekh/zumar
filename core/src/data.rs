@@ -1,34 +1,60 @@
 use std::fs;
+use std::path::Path;
 
-/// بيانات تدريب بسيطة مدمجة
 pub struct TrainingData {
     pub texts: Vec<String>,
 }
 
 impl TrainingData {
-    /// تحميل بيانات من ملف أو استخدام البيانات المدمجة
+    /// تحميل بيانات من ملف أو مجلد أو استخدام البيانات المدمجة
     pub fn load(path: Option<&str>) -> Self {
         if let Some(p) = path {
-            if let Ok(content) = fs::read_to_string(p) {
-                let texts: Vec<String> = content
-                    .lines()
-                    .filter(|l| !l.trim().is_empty())
-                    .map(|l| l.to_string())
-                    .collect();
-                if !texts.is_empty() {
-                    println!("📚 Loaded {} texts from {}", texts.len(), p);
-                    return Self { texts };
+            let path = Path::new(p);
+            
+            if path.is_dir() {
+                // 📂 مجلد: اقرأ كل ملفات .txt فيه
+                let mut all_texts = Vec::new();
+                if let Ok(entries) = fs::read_dir(path) {
+                    for entry in entries.flatten() {
+                        let file_path = entry.path();
+                        if file_path.extension().map_or(false, |e| e == "txt") {
+                            if let Ok(content) = fs::read_to_string(&file_path) {
+                                let texts: Vec<String> = content
+                                    .lines()
+                                    .filter(|l| !l.trim().is_empty())
+                                    .map(|l| l.to_string())
+                                    .collect();
+                                println!("   📄 {}: {} lines", file_path.file_name().unwrap().to_string_lossy(), texts.len());
+                                all_texts.extend(texts);
+                            }
+                        }
+                    }
+                }
+                if !all_texts.is_empty() {
+                    println!("📚 Loaded {} total texts from folder {}", all_texts.len(), p);
+                    return Self { texts: all_texts };
+                }
+            } else if path.is_file() {
+                // 📄 ملف واحد
+                if let Ok(content) = fs::read_to_string(path) {
+                    let texts: Vec<String> = content
+                        .lines()
+                        .filter(|l| !l.trim().is_empty())
+                        .map(|l| l.to_string())
+                        .collect();
+                    if !texts.is_empty() {
+                        println!("📚 Loaded {} texts from {}", texts.len(), p);
+                        return Self { texts };
+                    }
                 }
             }
         }
         
+        // 🆒 افتراضي: البيانات المدمجة
         println!("📚 Using built-in training data");
-        Self {
-            texts: builtin_texts(),
-        }
+        Self { texts: builtin_texts() }
     }
     
-    /// تكرار البيانات لعدد معين من المرات
     pub fn repeat(&self, times: usize) -> Vec<String> {
         let mut result = Vec::new();
         for _ in 0..times {
@@ -46,29 +72,9 @@ fn builtin_texts() -> Vec<String> {
         "Language models generate text based on patterns.".to_string(),
         "Deep learning uses neural networks with many layers.".to_string(),
         "Natural language processing helps computers understand text.".to_string(),
-        "Transformers use attention mechanisms for sequence modeling.".to_string(),
-        "Knowledge distillation transfers knowledge from large models to small ones.".to_string(),
-        "The future of AI is efficient and accessible to everyone.".to_string(),
         "Hello how are you doing today".to_string(),
         "I love programming and building new things".to_string(),
-        "Science and technology advance together".to_string(),
-        "The earth revolves around the sun".to_string(),
-        "Water is essential for all known forms of life".to_string(),
-        "Mathematics is the language of the universe".to_string(),
-        "Music can express emotions that words cannot".to_string(),
-        "History teaches us lessons for the future".to_string(),
-        "Reading books expands our knowledge and imagination".to_string(),
-        "Friendship is one of the most valuable things in life".to_string(),
-        "Innovation comes from thinking differently".to_string(),
         "The best way to learn is by doing".to_string(),
         "Practice makes perfect and patience is key".to_string(),
-        "Every day is a new opportunity to grow".to_string(),
-        "Success is the sum of small efforts repeated daily".to_string(),
-        "Curiosity is the engine of achievement".to_string(),
-        "We are building the future together".to_string(),
-        "Technology should serve humanity".to_string(),
-        "Simple solutions are often the best".to_string(),
-        "Learning never stops no matter how old you are".to_string(),
-        "The journey begins with a single step".to_string(),
     ]
 }
