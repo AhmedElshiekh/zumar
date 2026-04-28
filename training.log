@@ -1,3 +1,4 @@
+   Compiling core v2.2.0 (/root/projects/zumar/core)
 warning: type `TeacherConfig` is more private than the item `AutoTeacher::get_config`
    --> core/src/true_distill.rs:159:5
     |
@@ -159,8 +160,8 @@ help: if you meant to clone `Path`, implement `Clone` for it
      |
 
 warning: `core` (bin "core") generated 14 warnings (run `cargo fix --bin "core" -p core` to apply 1 suggestion)
-    Finished `release` profile [optimized] target(s) in 13.80s
-     Running `/tmp/cargo_target/release/core distill 500`
+    Finished `release` profile [optimized] target(s) in 27.29s
+     Running `/tmp/cargo_target/release/core distill 500 /data`
 [1;35m
 
     ███████╗██╗   ██╗███╗   ███╗ █████╗ ██████╗ 
@@ -202,40 +203,40 @@ Usage:
 
 🧠 TRUE KNOWLEDGE DISTILLATION
    Epochs: 100
-   Samples: 300
+   Samples: 100
    📖 Loading teacher metadata (lazy)...
    📊 Architecture: llama
    📊 Layers: 60, Hidden: 1024, Vocab: 50257
    ⚡ Lazy mode: loads 1 layer at a time
 
-  ✅ Ep 1: Loss 0.0000 | 210.7s
+  ✅ Ep 1: Loss 0.0000 | 73.8s
 
-  ✅ Ep 2: Loss 0.0000 | 430.3s
+  ✅ Ep 2: Loss 0.0000 | 140.5s
 
-  ✅ Ep 3: Loss 0.0000 | 648.8s
+  ✅ Ep 3: Loss 0.0000 | 215.2s
 
-  ✅ Ep 4: Loss 0.0000 | 861.6s
+  ✅ Ep 4: Loss 0.0000 | 292.0s
 
-  ✅ Ep 5: Loss 0.0000 | 1044.5s
+  ✅ Ep 5: Loss 0.0000 | 373.8s
 
-  ✅ Ep 6: Loss 0.0000 | 1233.3s
+  ✅ Ep 6: Loss 0.0000 | 451.3s
 
-  ✅ Ep 7: Loss 0.0000 | 1414.2s
+  ✅ Ep 7: Loss 0.0000 | 511.7s
 
-  ✅ Ep 8: Loss 0.0000 | 1598.3s
+  ✅ Ep 8: Loss 0.0000 | 582.1s
 
-  ✅ Ep 9: Loss 0.0000 | 1800.2s
+  ✅ Ep 9: Loss 0.0000 | 655.8s
 
-  ✅ Ep 10: Loss 0.0000 | 1992.4s
+  ✅ Ep 10: Loss 0.0000 | 719.9s
 
-  ✅ Ep 11: Loss 0.0000 | 2215.8s
+  ✅ Ep 11: Loss 0.0000 | 782.8s
 
-  ✅ Ep 12: Loss 0.0000 | 2423.8s
+  ✅ Ep 12: Loss 0.0000 | 845.3s
 
-  ✅ Ep 13: Loss 0.0000 | 2615.7s
+  ✅ Ep 13: Loss 0.0000 | 905.8s
 
-  ✅ Ep 14: Loss 0.0000 | 2835.1s
+  ✅ Ep 14: Loss 0.0000 | 966.2s
 
-  ✅ Ep 15: Loss 0.0000 | 3058.7s
+  ✅ Ep 15: Loss 0.0000 | 1026.6s
 
-  ✅ Ep 16: Loss 0.0000 | 3294.0s
+  ✅ Ep 16: Loss 0.0000 | 1088.7s

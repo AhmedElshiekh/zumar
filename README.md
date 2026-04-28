@@ -5,6 +5,12 @@
   <b>English</b> | <a href="./README.ar.md">العربية</a>
 </p>
 
+<p align="center">
+  <img src="https://img.shields.io/badge/Model-Zumar--Sovereign-ADFF2F?style=for-the-badge&logo=ai" alt="Model">
+  <img src="https://img.shields.io/badge/Language-Rust-orange?style=for-the-badge&logo=rust" alt="Rust">
+  <img src="https://img.shields.io/badge/Core-1--Bit--Mamba-FF4500?style=for-the-badge" alt="Architecture">
+  <img src="https://img.shields.io/badge/Network-P2P--Iroh-blue?style=for-the-badge" alt="Network">
+</p>
 
 ---
 
