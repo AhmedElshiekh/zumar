@@ -1,0 +1,4 @@
+/target
+*.safetensors
+*.gguf
+*.zmr

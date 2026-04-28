@@ -32,10 +32,10 @@ fn print_banner() {
 
 fn print_usage() {
     println!("\nUsage:");
-    println!("  distill <epochs>     - True distillation from ALL safetensors in teacher/");
+    println!("  distill <epochs>     - True distillation (resumes from last save)");
     println!("  train <epochs>       - Self-training on built-in data");
     println!("  chat                 - Chat mode (default)");
-    println!("  pack                 - Export to .zmr (1.58-bit) + .gguf");
+    println!("  pack                 - Export to .zmr + .gguf");
 }
 
 #[tokio::main]
@@ -58,7 +58,7 @@ async fn main() -> Result<()> {
     match mode {
         "distill" => {
             print_usage();
-            println!("\n🧠 TRUE KNOWLEDGE DISTILLATION (ALL MODELS)\n");
+            println!("\n🧠 TRUE KNOWLEDGE DISTILLATION (RESUMES FROM LAST SAVE)\n");
             
             let teacher_dir = std::path::Path::new("models/teacher");
             if !teacher_dir.exists() {
@@ -83,7 +83,7 @@ async fn main() -> Result<()> {
             });
             
             if teacher_files.is_empty() {
-                println!("\x1b[1;31m❌ No safetensors found in models/teacher/\x1b[0m");
+                println!("\x1b[1;31m❌ No safetensors found\x1b[0m");
                 return Ok(());
             }
             
@@ -101,16 +101,42 @@ async fn main() -> Result<()> {
                 println!("🧬 Model {}/{}: {}", i + 1, teacher_files.len(), teacher_path.file_name().unwrap().to_string_lossy());
                 println!("{}", "=".repeat(60));
                 
+                // ✅ تحميل الأوزان السابقة أو البدء من الصفر
                 let varmap = VarMap::new();
                 let vs = candle_nn::VarBuilder::from_varmap(&varmap, candle_core::DType::F32, &device);
-                let mut model = ZumarModel::new(vocab_size, hidden_size, num_layers, num_experts, top_k, n_heads, vs.clone())?;
+                
+                let zmr_path = std::path::Path::new("models/zumar-v1/zumar-b1.58.zmr");
+                let safetensors_path = std::path::Path::new("models/zumar-v1/model.safetensors");
+                
+                let mut model = if zmr_path.exists() {
+                    println!("\x1b[1;32m📥 Resuming from .zmr (continuing training)...\x1b[0m");
+                    let mut ldr = loader::ZumarLoader::new("models/zumar-v1");
+                    let _ = ldr.load_weights(&device)?;
+                    if let Some(ref packed) = ldr.packed_blocks {
+                        ZumarModel::from_packed_blocks(vocab_size, hidden_size, num_layers, num_experts, n_heads, packed, &device)?
+                    } else {
+                        println!("\x1b[1;33m⚠️  Failed to load .zmr, starting fresh\x1b[0m");
+                        ZumarModel::new(vocab_size, hidden_size, num_layers, num_experts, top_k, n_heads, vs.clone())?
+                    }
+                } else if safetensors_path.exists() {
+                    println!("\x1b[1;32m📥 Resuming from .safetensors (continuing training)...\x1b[0m");
+                    let vb = unsafe { candle_nn::VarBuilder::from_mmaped_safetensors(&[safetensors_path.clone()], candle_core::DType::F32, &device)? };
+                    ZumarModel::new(vocab_size, hidden_size, num_layers, num_experts, top_k, n_heads, vb)?
+                } else {
+                    println!("\x1b[1;33m🆕 No previous weights found. Starting fresh training...\x1b[0m");
+                    ZumarModel::new(vocab_size, hidden_size, num_layers, num_experts, top_k, n_heads, vs.clone())?
+                };
+                
                 let training_data = data::TrainingData::load(None);
                 let all_texts = training_data.repeat(10);
                 let mut all_ok = true;
                 
                 for chunk_start in (0..total_epochs).step_by(save_interval) {
                     let chunk_epochs = std::cmp::min(save_interval, total_epochs - chunk_start);
-                    println!("\n🔄 Section {}/{}, epochs {}-{}", chunk_start / save_interval + 1, (total_epochs + save_interval - 1) / save_interval, chunk_start + 1, chunk_start + chunk_epochs);
+                    println!("\n🔄 Section {}/{}, epochs {}-{}", 
+                        chunk_start / save_interval + 1, 
+                        (total_epochs + save_interval - 1) / save_interval, 
+                        chunk_start + 1, chunk_start + chunk_epochs);
                     
                     let config = true_distill::DistillConfig { epochs: chunk_epochs, learning_rate: 0.001, temperature: 3.0 };
                     let distiller = true_distill::TrueDistiller::new(config, device.clone());
@@ -128,13 +154,13 @@ async fn main() -> Result<()> {
                                 println!("\x1b[1;32m💾 Saved at epoch {} ({:.1} MB)\x1b[0m", global_epoch, size_mb);
                             }
                         }
-                        Err(e) => { println!("\x1b[1;31m❌ Failed at epoch {}: {}\x1b[0m", chunk_start, e); all_ok = false; break; }
+                        Err(e) => { println!("\x1b[1;31m❌ Failed: {}\x1b[0m", e); all_ok = false; break; }
                     }
                 }
                 
                 if all_ok {
-                    println!("\n\x1b[1;32m✅ All {} epochs complete!\x1b[0m", total_epochs);
-                    println!("\n\x1b[1;33m📦 Auto-exporting to .zmr + .gguf...\x1b[0m");
+                    println!("\n\x1b[1;32m✅ Training complete ({} epochs total)\x1b[0m", total_epochs);
+                    println!("\x1b[1;33m📦 Auto-exporting to .zmr + .gguf...\x1b[0m");
                     export_formats(&device, vocab_size, hidden_size, num_layers, num_experts, top_k, n_heads)?;
                     println!("\n\x1b[1;36m🚀 Run: cargo run -p core --release\x1b[0m");
                     break;
@@ -165,7 +191,6 @@ async fn main() -> Result<()> {
         
         _ => {
             println!("\n💬 Chat Mode\n");
-            
             let mut loader = loader::ZumarLoader::new("models/zumar-v1");
             let vb = loader.load_weights(&device)?;
             
@@ -309,15 +334,12 @@ fn export_formats(
     wmu(&mut gguf_data, "zumar.vocab_size", vocab_size as u32);
     
     let mut gguf_tensor_infos: Vec<(String, u32, Vec<u32>, Vec<u8>)> = Vec::new();
-    
     let process_weight = |name: &str, data: &[f32], shape: Vec<u32>, zmr: &mut Vec<u8>, gguf_info: &mut Vec<(String, u32, Vec<u32>, Vec<u8>)>| {
         let (scale, packed) = quantize_bitnet(data);
         zmr.extend_from_slice(&scale.to_le_bytes());
         zmr.extend_from_slice(&(data.len() as u32).to_le_bytes());
         zmr.extend_from_slice(&packed);
-        let mut tdata = Vec::new();
-        tdata.extend_from_slice(&scale.to_le_bytes());
-        tdata.extend_from_slice(&packed);
+        let mut tdata = Vec::new(); tdata.extend_from_slice(&scale.to_le_bytes()); tdata.extend_from_slice(&packed);
         gguf_info.push((name.to_string(), 7, shape, tdata));
     };
     
@@ -347,12 +369,10 @@ fn export_formats(
     
     let mut offset = gguf_data.len() as u64 + tensor_count * 32;
     for (name, dtype, dims, data) in &gguf_tensor_infos {
-        gguf_data.extend_from_slice(&(name.len() as u64).to_le_bytes());
-        gguf_data.extend_from_slice(name.as_bytes());
+        gguf_data.extend_from_slice(&(name.len() as u64).to_le_bytes()); gguf_data.extend_from_slice(name.as_bytes());
         gguf_data.extend_from_slice(&(dims.len() as u32).to_le_bytes());
         for &d in dims { gguf_data.extend_from_slice(&(d as u64).to_le_bytes()); }
-        gguf_data.extend_from_slice(&dtype.to_le_bytes());
-        gguf_data.extend_from_slice(&offset.to_le_bytes());
+        gguf_data.extend_from_slice(&dtype.to_le_bytes()); gguf_data.extend_from_slice(&offset.to_le_bytes());
         offset += data.len() as u64;
     }
     for (_, _, _, data) in &gguf_tensor_infos { gguf_data.extend_from_slice(data); }
