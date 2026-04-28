@@ -11,8 +11,7 @@ mod train;
 mod true_distill;
 
 use crate::layers::ZumarModel;
-use crate::layers::bitlinear::ZumarBitLinear;
-use candle_core::{Result, Tensor};
+use candle_core::Result;
 use candle_nn::VarMap;
 use std::io::{self, Write};
 
@@ -62,9 +61,6 @@ async fn main() -> Result<()> {
     let device = router.route("Inference Task");
     
     match mode {
-        // ==========================================
-        // تقطير حقيقي من كل النماذج في teacher/
-        // ==========================================
         "distill" => {
             print_usage();
             println!("\n🧠 TRUE KNOWLEDGE DISTILLATION (ALL MODELS)\n");
@@ -143,28 +139,19 @@ async fn main() -> Result<()> {
                 
                 if all_ok {
                     println!("\n\x1b[1;32m✅ All {} epochs complete!\x1b[0m", total_epochs);
-                    
-                    // ---- تصدير تلقائي بعد اكتمال التقطير ----
                     println!("\n\x1b[1;33m📦 Auto-exporting to .zmr + .gguf...\x1b[0m");
                     export_formats(&device, vocab_size, hidden_size, num_layers, num_experts, top_k, n_heads)?;
-                    
                     println!("\n\x1b[1;36m🚀 Run: cargo run -p core --release\x1b[0m");
                     break;
                 }
             }
         }
         
-        // ==========================================
-        // تصدير الصيغ (.zmr + .gguf)
-        // ==========================================
         "pack" => {
             println!("\n📦 EXPORTING TO .zmr + .gguf (BitNet 1.58-bit)\n");
             export_formats(&device, vocab_size, hidden_size, num_layers, num_experts, top_k, n_heads)?;
         }
         
-        // ==========================================
-        // تدريب ذاتي
-        // ==========================================
         "train" => {
             print_usage();
             println!("\n🎓 SELF-TRAINING MODE\n");
@@ -172,49 +159,48 @@ async fn main() -> Result<()> {
             let vs = candle_nn::VarBuilder::from_varmap(&varmap, candle_core::DType::F32, &device);
             let mut model = ZumarModel::new(vocab_size, hidden_size, num_layers, num_experts, top_k, n_heads, vs.clone())?;
             let epochs: usize = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(5);
-            println!("   Config: {}d, {}L, {}h, {} experts", hidden_size, num_layers, n_heads, num_experts);
-            println!("   Epochs: {}\n", epochs);
             train::run_training(&mut model, &varmap, &device, None, epochs)?;
             let save_dir = std::path::Path::new("models/zumar-v1");
             std::fs::create_dir_all(save_dir)?;
             varmap.save(save_dir.join("model.safetensors"))?;
             println!("\n💾 Saved!");
-            println!("🚀 Run: cargo run -p core --release");
         }
         
-        // ==========================================
-        // مساعدة
-        // ==========================================
         "help" | "--help" | "-h" => { print_usage(); }
         
-        // ==========================================
-        // محادثة (افتراضي)
-        // ==========================================
         _ => {
             println!("\n💬 Chat Mode\n");
             
-            // اكتشاف نوع النموذج
-            let zmr_exists = std::path::Path::new("models/zumar-v1/zumar-b1.58.zmr").exists();
-            let safetensors_exists = std::path::Path::new("models/zumar-v1/model.safetensors").exists();
-            
-            if zmr_exists {
-                println!("\x1b[1;32m🚀 Using 1.58-bit .zmr model (fast!)\x1b[0m");
-            } else if safetensors_exists {
-                println!("\x1b[1;33m⚠️  Using FP32 .safetensors (slow)\x1b[0m");
-                println!("\x1b[1;33m   Run 'pack' to create smaller .zmr\x1b[0m");
-            }
-            
-            let loader = loader::ZumarLoader::new("models/zumar-v1");
-        
+            let mut loader = loader::ZumarLoader::new("models/zumar-v1");
             let vb = loader.load_weights(&device)?;
-            println!("🔧 Building model...");
-            let mut model = ZumarModel::new(vocab_size, hidden_size, num_layers, num_experts, top_k, n_heads, vb.clone())?;
+            
+            // استخدام إعدادات .zmr إذا كانت متاحة
+            // let (v, h, l, e) = if let Some(cfg) = loader.get_zmr_config() {
+            //     (cfg.vocab_size, cfg.hidden_size, cfg.num_layers, cfg.num_experts)
+            // } else {
+            //     (vocab_size, hidden_size, num_layers, num_experts)
+            // };
+            let (v, h, l, e) = if let Some(cfg) = loader.get_zmr_config() {
+                (cfg.vocab_size, cfg.hidden_size, cfg.num_layers, cfg.num_experts)
+            } else {
+                (vocab_size, hidden_size, num_layers, num_experts)
+            };
+            
+            println!("🔧 Building model ({}d, {}L, {} experts)...", h, l, e);
+            let model = ZumarModel::new(v, h, l, e, top_k, n_heads, vb.clone())?;
+            // ... (باقي المحادثة)
+        // }
+        // _ => {
+        //     println!("\n💬 Chat Mode\n");
+        //     let loader = loader::ZumarLoader::new("models/zumar-v1");
+        //     let vb = loader.load_weights(&device)?;
+        //     println!("🔧 Building model...");
+        //     let model = ZumarModel::new(vocab_size, hidden_size, num_layers, num_experts, top_k, n_heads, vb.clone())?;
             println!("✅ Ready.\n");
             
             let temperature: f64 = 0.8;
             let max_tokens: usize = 120;
             let penalty: f32 = 1.2;
-            println!("\x1b[1;34m💡 Type your message or 'exit' to quit.\x1b[0m\n");
             
             loop {
                 print!("\x1b[1;32mYou>\x1b[0m ");
@@ -263,7 +249,6 @@ async fn main() -> Result<()> {
                 let n = generated.len();
                 let tps = if elapsed.as_secs_f64() > 0.0 { n as f64 / elapsed.as_secs_f64() } else { 0.0 };
                 println!();
-                println!("\x1b[90m──────────────────────────────────────\x1b[0m");
                 println!("\x1b[90m📊 {} tokens in {:.1}s ({:.1} tok/s)\x1b[0m", n, elapsed.as_secs_f64(), tps);
             }
             println!("\n\x1b[1;35m🛡️  ZUMAR SHUTTING DOWN\x1b[0m");
@@ -273,12 +258,12 @@ async fn main() -> Result<()> {
 }
 
 // ============================================================
-// دالة التصدير المشتركة (.zmr + .gguf)
+// دالة التصدير المشتركة (.zmr + .gguf) مع ضغط 2-bit حقيقي
 // ============================================================
 fn export_formats(
     device: &candle_core::Device,
     vocab_size: usize, hidden_size: usize, num_layers: usize,
-    num_experts: usize, top_k: usize, n_heads: usize,
+    num_experts: usize, _top_k: usize, _n_heads: usize,
 ) -> Result<()> {
     let save_path = std::path::Path::new("models/zumar-v1").join("model.safetensors");
     if !save_path.exists() {
@@ -287,42 +272,40 @@ fn export_formats(
     }
     
     let vb = unsafe { candle_nn::VarBuilder::from_mmaped_safetensors(&[save_path.clone()], candle_core::DType::F32, device)? };
-    let model = ZumarModel::new(vocab_size, hidden_size, num_layers, num_experts, top_k, n_heads, vb)?;
+    let model = ZumarModel::new(vocab_size, hidden_size, num_layers, num_experts, 2, 16, vb)?;
     
     let orig_mb = std::fs::metadata(&save_path).map(|m| m.len() as f64 / 1_048_576.0).unwrap_or(0.0);
+    println!("\x1b[1;33m🔢 Quantizing to BitNet b1.58 (2-bit packed)...\x1b[0m");
     
-    // Helper: تكميم BitNet b1.58 (-1, 0, +1)
-    let quantize_bitnet = |data: &[f32]| -> (f32, Vec<u8>, Vec<u8>) {
+    // Helper: تكميم BitNet b1.58 - ضغط 2-bit حقيقي (4 أوزان/بايت)
+    let quantize_bitnet = |data: &[f32]| -> (f32, Vec<u8>) {
         let sum_abs: f32 = data.iter().map(|v| v.abs()).sum();
         let scale = sum_abs / data.len() as f32;
         let scale = if scale < 1e-6 { 1.0 } else { scale };
         
-        // 2-bit per weight: 00=-1, 01=0, 10=+1
-        let mut q_2bit = Vec::with_capacity((data.len() + 3) / 4);
-        // 1.58-bit unpacked (1 byte per weight for .zmr)
-        let mut q_zmr = Vec::with_capacity(data.len());
-        
+        // 2-bit per weight: 4 أوزان ← 1 بايت
+        let mut packed = Vec::with_capacity((data.len() + 3) / 4);
         for chunk in data.chunks(4) {
             let mut byte: u8 = 0;
             for (i, &val) in chunk.iter().enumerate() {
-                let ternary: u8 = if val / scale <= -0.33 { 0u8 }       // -1
-                else if val / scale >= 0.33 { 2u8 }                      // +1
-                else { 1u8 };                                             // 0
+                let ternary: u8 = if val / scale <= -0.33 {
+                    0b00  // -1
+                } else if val / scale >= 0.33 {
+                    0b10  // +1
+                } else {
+                    0b01  // 0
+                };
                 byte |= ternary << (i * 2);
-                q_zmr.push(ternary);
             }
-            q_2bit.push(byte);
+            packed.push(byte);
         }
-        // أكمل .zmr إذا احتاج
-        while q_zmr.len() < data.len() { q_zmr.push(1); }
-        
-        (scale, q_2bit, q_zmr)
+        (scale, packed)
     };
     
     // ---- بناء .zmr ----
     let mut zmr_data = Vec::new();
-    zmr_data.extend_from_slice(b"ZUMR");                    // Magic
-    zmr_data.extend_from_slice(&1u32.to_le_bytes());        // Version
+    zmr_data.extend_from_slice(b"ZUMR");
+    zmr_data.extend_from_slice(&1u32.to_le_bytes());
     zmr_data.extend_from_slice(&(vocab_size as u32).to_le_bytes());
     zmr_data.extend_from_slice(&(hidden_size as u32).to_le_bytes());
     zmr_data.extend_from_slice(&(num_layers as u32).to_le_bytes());
@@ -337,7 +320,6 @@ fn export_formats(
     let n_kv = 6u64;
     gguf_data.extend_from_slice(&n_kv.to_le_bytes());
     
-    // Metadata helper
     let wms = |d: &mut Vec<u8>, k: &str, v: &str| {
         d.extend_from_slice(&(k.len() as u64).to_le_bytes());
         d.extend_from_slice(k.as_bytes());
@@ -361,16 +343,20 @@ fn export_formats(
     
     let mut gguf_tensor_infos: Vec<(String, u32, Vec<u32>, Vec<u8>)> = Vec::new();
     
-    // معالجة كل الأوزان
-    let mut process_weight = |name: &str, data: &[f32], shape: Vec<u32>, zmr: &mut Vec<u8>, gguf_info: &mut Vec<(String, u32, Vec<u32>, Vec<u8>)>| {
-        let (scale, q_2bit, q_zmr) = quantize_bitnet(data);
+    // دالة معالجة وزن واحد
+    let process_weight = |name: &str, data: &[f32], shape: Vec<u32>,
+                           zmr: &mut Vec<u8>, gguf_info: &mut Vec<(String, u32, Vec<u32>, Vec<u8>)>| {
+        let (scale, packed) = quantize_bitnet(data);
+        
+        // .zmr: scale (4B) + num_elements (4B) + packed 2-bit data
         zmr.extend_from_slice(&scale.to_le_bytes());
         zmr.extend_from_slice(&(data.len() as u32).to_le_bytes());
-        zmr.extend_from_slice(&q_zmr);
+        zmr.extend_from_slice(&packed);
         
+        // .gguf: scale (4B) + packed 2-bit data
         let mut tdata = Vec::new();
         tdata.extend_from_slice(&scale.to_le_bytes());
-        tdata.extend_from_slice(&q_2bit);
+        tdata.extend_from_slice(&packed);
         gguf_info.push((name.to_string(), 7, shape, tdata));
     };
     
@@ -404,7 +390,7 @@ fn export_formats(
     gguf_tensor_infos.push(("model.norm.weight".to_string(), 1, vec![hidden_size as u32], vec![1u8; hidden_size * 2]));
     
     // ---- كتابة GGUF data ----
-    let mut offset = gguf_data.len() as u64 + tensor_count * (8 + 4 + 8 * 3 + 4 + 8);
+    let mut offset = gguf_data.len() as u64 + tensor_count * 32;
     for (name, dtype, dims, data) in &gguf_tensor_infos {
         gguf_data.extend_from_slice(&(name.len() as u64).to_le_bytes());
         gguf_data.extend_from_slice(name.as_bytes());
@@ -429,16 +415,15 @@ fn export_formats(
     println!("║  📦 EXPORT COMPLETE                  ║");
     println!("╠══════════════════════════════════════╣");
     println!("║  Original (FP32):  {:>8.1} MB        ║", orig_mb);
-    println!("║  .zmr (1.58-bit):  {:>8.1} MB        ║", zmr_mb);
-    println!("║  .gguf (1.58-bit): {:>8.1} MB        ║", gguf_mb);
+    println!("║  .zmr (2-bit):     {:>8.1} MB        ║", zmr_mb);
+    println!("║  .gguf (2-bit):    {:>8.1} MB        ║", gguf_mb);
     println!("║  Ratio:            {:>8.1}x smaller   ║", orig_mb / zmr_mb.max(0.1));
     println!("╠══════════════════════════════════════╣");
-    println!("║  Saved to:                           ║");
-    println!("║  {}          ║", zmr_path.display());
-    println!("║  {}          ║", gguf_path.display());
+    println!("║  {}\x1b[0m", zmr_path.display());
+    println!("║  {}\x1b[0m", gguf_path.display());
     println!("╚══════════════════════════════════════╝");
-    println!("\n\x1b[1;36m🚀 Use .zmr with:   cargo run -p core --release");
-    println!("🚀 Use .gguf with:  ./llama-cli -m {} -p \"Hello\"\x1b[0m", gguf_path.display());
+    println!("\n\x1b[1;36m🚀 Chat:   cargo run -p core --release");
+    println!("🚀 llama:  ./llama-cli -m {} -p \"Hello\"\x1b[0m", gguf_path.display());
     
     Ok(())
 }

@@ -1,111 +1,137 @@
 #![allow(dead_code)]
-use candle_core::{Tensor, Result, Device};
 
-// تضمين ملفات الـ PTX (كود الآلة للـ GPU) فقط عند تفعيل ميزة cuda
-#[cfg(feature = "cuda")]
-const BITNET_PTX: &str = include_str!("bitnet_kernel.ptx");
-#[cfg(feature = "cuda")]
-const MAMBA_SCAN_PTX: &str = include_str!("mamba_scan.ptx");
+use candle_core::{Tensor, Result};
 
-/// الدالة الموجهة لضرب المصفوفات بنظام 1.58-bit
-/// تكتشف العتاد وتختار المسار الأسرع تلقائياً لضمان سيادة الأداء
-pub fn bitnet_matmul(x: &Tensor, w: &Tensor) -> Result<Tensor> {
-    let device = x.device();
-
-    if is_kernel_available(device) {
-        // تشغيل كيرنل CUDA المخصص (فائق السرعة للأوزان الثنائية)
-        launch_bitnet_kernel(x, w)
-    } else {
-        // مسار الـ CPU المحسن: يستخدم ميزة target-cpu=native التي فعلناها في البناء
-        // هذا المسار هو الأنسب حالياً لسيرفرك طالما لم يتم تثبيت CUDA Toolkit
-        x.matmul(&w.t()?)
+/// ضرب مصفوفات BitNet: x @ W^T حيث W هي أوزان 2-bit
+/// 
+/// المدخلات:
+///   x: [M, K] - مصفوفة المدخلات (FP32)
+///   packed_w: بايتات الأوزان المضغوطة (2-bit per weight)
+///   scale: معامل القياس
+///   weight_shape: (N, K) أبعاد الوزن الأصلي
+///
+/// المخرجات:
+///   [M, N] - نتيجة الضرب
+pub fn bitnet_matmul(
+    x: &Tensor,
+    packed_w: &[u8],
+    scale: f32,
+    weight_shape: (usize, usize),
+) -> Result<Tensor> {
+    let (m, k) = x.dims2()?;
+    let (n, k_w) = weight_shape;
+    
+    if k != k_w {
+        return Err(candle_core::Error::Msg(format!(
+            "Shape mismatch: x has {} cols, weight has {} cols", k, k_w
+        )));
     }
-}
-
-/// دالة إطلاق كيرنل الـ 1-bit Matrix Multiplication (BitNet) المخصص للـ GPU
-pub fn launch_bitnet_kernel(x: &Tensor, w: &Tensor) -> Result<Tensor> {
-    #[cfg(feature = "cuda")]
-    {
-        if let Device::Cuda(dev) = x.device() {
-            // [تحسين مستقبلي]: بمجرد توفر nvcc وترجمة الـ PTX
-            // سيتم تحميل الدالة "fast_bit_linear_forward" هنا مباشرة
-            // حالياً نستخدم matmul كـ Fallback داخل الـ CUDA لضمان استقرار التشغيل
-            return x.matmul(&w.t()?);
+    
+    let device = x.device();
+    let x_data = x.to_vec2::<f32>()?;  // [M, K]
+    
+    // فك ضغط الأوزان إلى قيم {-1, 0, +1} مباشرة
+    let map = [0.0f32, 0.0f32, 1.0f32, -1.0f32]; // 00→0, 01→0, 10→+1, 11→-1
+    
+    let mut result = vec![0.0f32; m * n];
+    
+    for i in 0..m {
+        for j in 0..n {
+            let mut sum = 0.0f32;
+            for k_idx in 0..k {
+                // استخراج الوزن 2-bit
+                let weight_idx = j * k + k_idx;
+                let byte_idx = weight_idx / 4;
+                let bit_offset = (weight_idx % 4) * 2;
+                
+                if byte_idx < packed_w.len() {
+                    let byte = packed_w[byte_idx];
+                    let bits = (byte >> bit_offset) & 0b11;
+                    let w_val = map[bits as usize];
+                    
+                    sum += x_data[i][k_idx] * w_val;
+                }
+            }
+            result[i * n + j] = sum * scale;
         }
     }
     
-    // إذا لم يتم تفعيل ميزة cuda في Cargo أو الجهاز غير متوافق
-    x.matmul(&w.t()?)
+    Tensor::from_vec(result, (m, n), device)
 }
 
-/// الدالة السيادية لمعالجة الـ Selective Scan (Mamba Core)
-/// تعمل كموجه (Dispatcher) يختار أفضل مسار حسابي بناءً على العتاد
-pub fn selective_scan_custom(
+/// إصدار أسرع: معالجة كل 4 أوزان معاً
+pub fn bitnet_matmul_fast(
     x: &Tensor,
-    delta: &Tensor,
-    a: &Tensor,
-    b: &Tensor,
-    c: &Tensor,
-    d: &Tensor,
+    packed_w: &[u8],
+    scale: f32,
+    weight_shape: (usize, usize),
 ) -> Result<Tensor> {
+    let (m, k) = x.dims2()?;
+    let (n, k_w) = weight_shape;
+    
+    if k != k_w {
+        return Err(candle_core::Error::Msg("Shape mismatch".to_string()));
+    }
+    
     let device = x.device();
-
-    if is_kernel_available(device) {
-        launch_mamba_scan_kernel(x, delta, a, b, c, d)
-    } else {
-        // استخدام الخوارزمية الموازية المحسنة للـ CPU (مناسبة لـ Termux/ARM)
-        parallel_selective_scan(x, delta, a, b, c, d)
+    let x_data = x.to_vec2::<f32>()?;
+    
+    // جدول بحث سريع: كل بايت = 4 أوزان
+    // byte → [w0, w1, w2, w3] حيث كل وزن = -1, 0, أو +1
+    let mut result = vec![0.0f32; m * n];
+    
+    for i in 0..m {
+        let x_row = &x_data[i];
+        let res_row = &mut result[i * n..(i + 1) * n];
+        
+        for j in 0..n {
+            let mut sum = 0.0f32;
+            let base_idx = j * k;
+            
+            // معالجة 4 أوزان في كل دورة
+            let num_full_chunks = k / 4;
+            for chunk in 0..num_full_chunks {
+                let byte_idx = (base_idx / 4) + chunk;
+                if byte_idx >= packed_w.len() { break; }
+                
+                let byte = packed_w[byte_idx];
+                let x_base = chunk * 4;
+                
+                // فك تشفير 4 أوزان من بايت واحد
+                for bit in 0..4 {
+                    let bits = (byte >> (bit * 2)) & 0b11;
+                    let w_val = match bits {
+                        0b00 => 0.0f32,   // 0
+                        0b01 => 0.0f32,   // 0 (احتياطي)
+                        0b10 => 1.0f32,   // +1
+                        0b11 => -1.0f32,  // -1
+                        _ => 0.0f32,
+                    };
+                    sum += x_row[x_base + bit] * w_val;
+                }
+            }
+            
+            // معالجة الباقي (أقل من 4)
+            let remainder_start = num_full_chunks * 4;
+            for k_idx in remainder_start..k {
+                let weight_idx = base_idx + k_idx;
+                let byte_idx = weight_idx / 4;
+                let bit_offset = (weight_idx % 4) * 2;
+                
+                if byte_idx < packed_w.len() {
+                    let bits = (packed_w[byte_idx] >> bit_offset) & 0b11;
+                    let w_val = match bits {
+                        0b10 => 1.0f32,
+                        0b11 => -1.0f32,
+                        _ => 0.0f32,
+                    };
+                    sum += x_row[k_idx] * w_val;
+                }
+            }
+            
+            res_row[j] = sum * scale;
+        }
     }
-}
-
-/// تنفيذ الـ Parallel Scan (Prefix Sum) على الـ CPU بذكاء موازٍ
-fn parallel_selective_scan(
-    x: &Tensor,
-    delta: &Tensor,
-    _a: &Tensor,
-    _b: &Tensor,
-    _c: &Tensor,
-    _d: &Tensor,
-) -> Result<Tensor> {
-    // 1. حساب الـ Discretization المبدئي (Δ * x)
-    let x_delta = x.broadcast_mul(delta)?;
-
-    // 2. تطبيق الـ Cumulative Sum (الذي ينفذ الـ Parallel Scan داخلياً في Candle)
-    // هذا يحاكي تجميع الحالات عبر الزمن بذكاء موازٍ O(log N)
-    let scan_result = x_delta.cumsum(1)?;
-
-    // 3. دمج المخرجات مع وصلة عبور (Residual Connection)
-    scan_result.broadcast_add(x)
-}
-
-/// دالة إطلاق كيرنل الـ CUDA لـ Mamba (مخصصة للـ GPU)
-fn launch_mamba_scan_kernel(
-    x: &Tensor,
-    _delta: &Tensor,
-    _a: &Tensor,
-    _b: &Tensor,
-    _c: &Tensor,
-    _d: &Tensor,
-) -> Result<Tensor> {
-    #[cfg(feature = "cuda")]
-    {
-        // Fallback للـ CUDA Matmul لحين اكتمال الـ PTX
-        Ok(x.clone())
-    }
-    #[cfg(not(feature = "cuda"))]
-    {
-        Ok(x.clone())
-    }
-}
-
-/// التحقق من توافر دعم الـ CUDA في البيئة الحالية
-pub fn is_kernel_available(_device: &Device) -> bool {
-    #[cfg(feature = "cuda")]
-    {
-        _device.is_cuda()
-    }
-    #[cfg(not(feature = "cuda"))]
-    {
-        false
-    }
+    
+    Tensor::from_vec(result, (m, n), device)
 }

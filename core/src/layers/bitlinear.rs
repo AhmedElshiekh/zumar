@@ -1,5 +1,6 @@
 use candle_core::{Tensor, Result, DType};
 use candle_nn::{Module, VarBuilder};
+use crate::kernels;
 
 pub struct ZumarBitLinear {
     pub latent_weight: Tensor,
@@ -7,7 +8,7 @@ pub struct ZumarBitLinear {
     pub bias: Option<Tensor>,
     pub scale: Tensor,
     pub quantize: bool,
-    /// الأوزان بصيغة 2-bit مضغوطة (للتحميل المباشر)
+    /// الأوزان المضغوطة 2-bit (للـ kernel المباشر)
     pub packed_2bit: Option<Vec<u8>>,
     pub weight_shape: (usize, usize),
 }
@@ -34,34 +35,18 @@ impl ZumarBitLinear {
         })
     }
     
-    /// إنشاء من بيانات .zmr المضغوطة مباشرة
+    /// تحميل من بيانات .zmr المضغوطة
     pub fn from_zmr(data: &[u8], shape: (usize, usize), device: &candle_core::Device) -> Result<Self> {
         if data.len() < 4 {
             return Err(candle_core::Error::Msg("Invalid packed data".to_string()));
         }
         
-        // قراءة scale
         let scale_val = f32::from_le_bytes([data[0], data[1], data[2], data[3]]);
         let scale = Tensor::new(scale_val, device)?;
-        
-        // الأوزان المضغوطة (2-bit)
         let packed = data[4..].to_vec();
         
-        // فك ضغط الأوزان إلى FP32 للاستخدام
-        let total = shape.0 * shape.1;
-        let mut weights = Vec::with_capacity(total);
-        let map = [-1.0f32, 0.0f32, 1.0f32, 0.0f32]; // 00→-1, 01→0, 10→+1, 11→0
-        
-        for &byte in &packed {
-            for i in 0..4 {
-                if weights.len() >= total { break; }
-                let bits = (byte >> (i * 2)) & 0b11;
-                weights.push(map[bits as usize] * scale_val);
-            }
-        }
-        weights.truncate(total);
-        
-        let latent = Tensor::from_vec(weights, shape, device)?;
+        // وزن وهمي للتوافق
+        let latent = Tensor::zeros(shape, DType::F32, device)?;
         
         Ok(Self {
             latent_weight: latent.clone(),
@@ -74,25 +59,18 @@ impl ZumarBitLinear {
         })
     }
     
-    pub fn quantize_weights(&mut self) -> Result<()> {
-        let mean_abs = self.latent_weight.abs()?
-            .mean_all()?
-            .to_scalar::<f32>()?
-            .max(1e-6);
-        
-        self.scale = Tensor::new(mean_abs, self.latent_weight.device())?;
-        
-        let scaled = self.latent_weight.broadcast_div(&self.scale)?;
-        let rounded = scaled.round()?;
-        let clamped = rounded.clamp(-1.0f64, 1.0f64)?;
-        
-        self.quantized_weight = Some(clamped);
-        self.quantize = true;
-        
-        Ok(())
+    /// استخدام BitNet kernel مباشرة
+    pub fn forward_bitnet(&self, x: &Tensor) -> Result<Tensor> {
+        if let Some(ref packed) = self.packed_2bit {
+            let scale_val = self.scale.to_scalar::<f32>()?;
+            kernels::bitnet_matmul_fast(x, packed, scale_val, self.weight_shape)
+        } else {
+            // رجوع للطريقة العادية
+            x.matmul(&self.latent_weight.t()?)
+        }
     }
     
-    /// تصدير الأوزان كـ 2-bit للتخزين المضغوط
+    /// تصدير الأوزان إلى 2-bit
     pub fn to_packed_bytes(&self) -> Result<Vec<u8>> {
         let weight = if let Some(ref qw) = self.quantized_weight {
             qw.to_dtype(DType::F32)?
@@ -109,14 +87,14 @@ impl ZumarBitLinear {
         for chunk in flat.chunks(4) {
             let mut byte: u8 = 0;
             for (i, &val) in chunk.iter().enumerate() {
-                let quantized: u8 = if val <= -0.5 {
-                    0b00
+                let bits: u8 = if val <= -0.5 {
+                    0b11  // -1
                 } else if val >= 0.5 {
-                    0b10
+                    0b10  // +1
                 } else {
-                    0b01
+                    0b00  // 0
                 };
-                byte |= quantized << (i * 2);
+                byte |= bits << (i * 2);
             }
             packed.push(byte);
         }
@@ -136,9 +114,11 @@ impl Module for ZumarBitLinear {
             x.clone()
         };
         
-        let res = if let Some(ref qw) = self.quantized_weight {
-            let qw_f32 = qw.to_dtype(DType::F32)?;
-            x_2d.matmul(&qw_f32.t()?)?.broadcast_mul(&self.scale)?
+        // استخدام BitNet kernel إذا كانت الأوزان المضغوطة متاحة
+        let res = if self.packed_2bit.is_some() {
+            self.forward_bitnet(&x_2d)?
+        } else if let Some(ref qw) = self.quantized_weight {
+            x_2d.matmul(&qw.to_dtype(DType::F32)?.t()?)?.broadcast_mul(&self.scale)?
         } else {
             x_2d.matmul(&self.latent_weight.t()?)?
         };

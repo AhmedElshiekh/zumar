@@ -48,19 +48,15 @@ impl ZumarBlock {
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
         let residual = x.clone();
         let normed = self.pre_norm.forward(x)?;
-        
         let q = self.q_proj.forward(&normed)?;
         let k = self.k_proj.forward(&normed)?;
         let v = self.v_proj.forward(&normed)?;
         let attn_out = self.attention.forward(&q, &k, &v)?;
         let attn_out = self.o_proj.forward(&attn_out)?;
-        
         let x = (residual + attn_out)?;
-        
         let residual_2 = x.clone();
         let normed_2 = self.post_norm.forward(&x)?;
         let moe_out = self.moe.forward(&normed_2)?;
-        
         residual_2 + moe_out
     }
 }
