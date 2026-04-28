@@ -36,15 +36,10 @@ fn print_usage() {
     println!("  train <epochs>       - Self-training on built-in data");
     println!("  chat                 - Chat mode (default)");
     println!("  pack                 - Export to .zmr (1.58-bit) + .gguf");
-    println!("\nExamples:");
-    println!("  cargo run -p core --release -- distill 1000");
-    println!("  cargo run -p core --release -- train 100");
-    println!("  cargo run -p core --release");
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    print!("\x1b[2J");
     print_banner();
     
     let args: Vec<String> = std::env::args().collect();
@@ -174,12 +169,6 @@ async fn main() -> Result<()> {
             let mut loader = loader::ZumarLoader::new("models/zumar-v1");
             let vb = loader.load_weights(&device)?;
             
-            // استخدام إعدادات .zmr إذا كانت متاحة
-            // let (v, h, l, e) = if let Some(cfg) = loader.get_zmr_config() {
-            //     (cfg.vocab_size, cfg.hidden_size, cfg.num_layers, cfg.num_experts)
-            // } else {
-            //     (vocab_size, hidden_size, num_layers, num_experts)
-            // };
             let (v, h, l, e) = if let Some(cfg) = loader.get_zmr_config() {
                 (cfg.vocab_size, cfg.hidden_size, cfg.num_layers, cfg.num_experts)
             } else {
@@ -187,15 +176,14 @@ async fn main() -> Result<()> {
             };
             
             println!("🔧 Building model ({}d, {}L, {} experts)...", h, l, e);
-            let model = ZumarModel::new(v, h, l, e, top_k, n_heads, vb.clone())?;
-            // ... (باقي المحادثة)
-        // }
-        // _ => {
-        //     println!("\n💬 Chat Mode\n");
-        //     let loader = loader::ZumarLoader::new("models/zumar-v1");
-        //     let vb = loader.load_weights(&device)?;
-        //     println!("🔧 Building model...");
-        //     let model = ZumarModel::new(vocab_size, hidden_size, num_layers, num_experts, top_k, n_heads, vb.clone())?;
+            
+            let model = if let Some(ref packed) = loader.packed_blocks {
+                println!("   ⚡ Direct 2-bit mode ({} blocks)", packed.len());
+                ZumarModel::from_packed_blocks(v, h, l, e, n_heads, packed, &device)?
+            } else {
+                ZumarModel::new(v, h, l, e, top_k, n_heads, vb.clone())?
+            };
+            
             println!("✅ Ready.\n");
             
             let temperature: f64 = 0.8;
@@ -257,9 +245,6 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-// ============================================================
-// دالة التصدير المشتركة (.zmr + .gguf) مع ضغط 2-bit حقيقي
-// ============================================================
 fn export_formats(
     device: &candle_core::Device,
     vocab_size: usize, hidden_size: usize, num_layers: usize,
@@ -273,28 +258,18 @@ fn export_formats(
     
     let vb = unsafe { candle_nn::VarBuilder::from_mmaped_safetensors(&[save_path.clone()], candle_core::DType::F32, device)? };
     let model = ZumarModel::new(vocab_size, hidden_size, num_layers, num_experts, 2, 16, vb)?;
-    
     let orig_mb = std::fs::metadata(&save_path).map(|m| m.len() as f64 / 1_048_576.0).unwrap_or(0.0);
     println!("\x1b[1;33m🔢 Quantizing to BitNet b1.58 (2-bit packed)...\x1b[0m");
     
-    // Helper: تكميم BitNet b1.58 - ضغط 2-bit حقيقي (4 أوزان/بايت)
     let quantize_bitnet = |data: &[f32]| -> (f32, Vec<u8>) {
         let sum_abs: f32 = data.iter().map(|v| v.abs()).sum();
         let scale = sum_abs / data.len() as f32;
         let scale = if scale < 1e-6 { 1.0 } else { scale };
-        
-        // 2-bit per weight: 4 أوزان ← 1 بايت
         let mut packed = Vec::with_capacity((data.len() + 3) / 4);
         for chunk in data.chunks(4) {
             let mut byte: u8 = 0;
             for (i, &val) in chunk.iter().enumerate() {
-                let ternary: u8 = if val / scale <= -0.33 {
-                    0b00  // -1
-                } else if val / scale >= 0.33 {
-                    0b10  // +1
-                } else {
-                    0b01  // 0
-                };
+                let ternary: u8 = if val / scale <= -0.33 { 0b00 } else if val / scale >= 0.33 { 0b10 } else { 0b01 };
                 byte |= ternary << (i * 2);
             }
             packed.push(byte);
@@ -302,7 +277,6 @@ fn export_formats(
         (scale, packed)
     };
     
-    // ---- بناء .zmr ----
     let mut zmr_data = Vec::new();
     zmr_data.extend_from_slice(b"ZUMR");
     zmr_data.extend_from_slice(&1u32.to_le_bytes());
@@ -311,27 +285,20 @@ fn export_formats(
     zmr_data.extend_from_slice(&(num_layers as u32).to_le_bytes());
     zmr_data.extend_from_slice(&(num_experts as u32).to_le_bytes());
     
-    // ---- بناء GGUF ----
     let mut gguf_data = Vec::new();
     gguf_data.extend_from_slice(b"GGUF");
     gguf_data.extend_from_slice(&3u32.to_le_bytes());
     let tensor_count = 1 + 1 + (num_layers as u64) * (4 + 1 + num_experts as u64 + 2);
     gguf_data.extend_from_slice(&tensor_count.to_le_bytes());
-    let n_kv = 6u64;
-    gguf_data.extend_from_slice(&n_kv.to_le_bytes());
+    gguf_data.extend_from_slice(&6u64.to_le_bytes());
     
     let wms = |d: &mut Vec<u8>, k: &str, v: &str| {
-        d.extend_from_slice(&(k.len() as u64).to_le_bytes());
-        d.extend_from_slice(k.as_bytes());
-        d.extend_from_slice(&8u32.to_le_bytes());
-        d.extend_from_slice(&(v.len() as u64).to_le_bytes());
-        d.extend_from_slice(v.as_bytes());
+        d.extend_from_slice(&(k.len() as u64).to_le_bytes()); d.extend_from_slice(k.as_bytes());
+        d.extend_from_slice(&8u32.to_le_bytes()); d.extend_from_slice(&(v.len() as u64).to_le_bytes()); d.extend_from_slice(v.as_bytes());
     };
     let wmu = |d: &mut Vec<u8>, k: &str, v: u32| {
-        d.extend_from_slice(&(k.len() as u64).to_le_bytes());
-        d.extend_from_slice(k.as_bytes());
-        d.extend_from_slice(&4u32.to_le_bytes());
-        d.extend_from_slice(&v.to_le_bytes());
+        d.extend_from_slice(&(k.len() as u64).to_le_bytes()); d.extend_from_slice(k.as_bytes());
+        d.extend_from_slice(&4u32.to_le_bytes()); d.extend_from_slice(&v.to_le_bytes());
     };
     
     wms(&mut gguf_data, "general.architecture", "zumar");
@@ -343,28 +310,20 @@ fn export_formats(
     
     let mut gguf_tensor_infos: Vec<(String, u32, Vec<u32>, Vec<u8>)> = Vec::new();
     
-    // دالة معالجة وزن واحد
-    let process_weight = |name: &str, data: &[f32], shape: Vec<u32>,
-                           zmr: &mut Vec<u8>, gguf_info: &mut Vec<(String, u32, Vec<u32>, Vec<u8>)>| {
+    let process_weight = |name: &str, data: &[f32], shape: Vec<u32>, zmr: &mut Vec<u8>, gguf_info: &mut Vec<(String, u32, Vec<u32>, Vec<u8>)>| {
         let (scale, packed) = quantize_bitnet(data);
-        
-        // .zmr: scale (4B) + num_elements (4B) + packed 2-bit data
         zmr.extend_from_slice(&scale.to_le_bytes());
         zmr.extend_from_slice(&(data.len() as u32).to_le_bytes());
         zmr.extend_from_slice(&packed);
-        
-        // .gguf: scale (4B) + packed 2-bit data
         let mut tdata = Vec::new();
         tdata.extend_from_slice(&scale.to_le_bytes());
         tdata.extend_from_slice(&packed);
         gguf_info.push((name.to_string(), 7, shape, tdata));
     };
     
-    // Embedding
     let emb = model.embedding.embeddings().flatten_all()?.to_vec1::<f32>()?;
     process_weight("model.embed_tokens.weight", &emb, vec![vocab_size as u32, hidden_size as u32], &mut zmr_data, &mut gguf_tensor_infos);
     
-    // Layers
     for i in 0..num_layers {
         let layer = &model.layers[i];
         for (pn, proj) in [("q_proj", &layer.q_proj), ("k_proj", &layer.k_proj), ("v_proj", &layer.v_proj), ("o_proj", &layer.o_proj)] {
@@ -382,14 +341,10 @@ fn export_formats(
         }
     }
     
-    // LM Head
     let head = model.lm_head.latent_weight.flatten_all()?.to_vec1::<f32>()?;
     process_weight("lm_head.weight", &head, vec![vocab_size as u32, hidden_size as u32], &mut zmr_data, &mut gguf_tensor_infos);
-    
-    // Final norm
     gguf_tensor_infos.push(("model.norm.weight".to_string(), 1, vec![hidden_size as u32], vec![1u8; hidden_size * 2]));
     
-    // ---- كتابة GGUF data ----
     let mut offset = gguf_data.len() as u64 + tensor_count * 32;
     for (name, dtype, dims, data) in &gguf_tensor_infos {
         gguf_data.extend_from_slice(&(name.len() as u64).to_le_bytes());
@@ -402,7 +357,6 @@ fn export_formats(
     }
     for (_, _, _, data) in &gguf_tensor_infos { gguf_data.extend_from_slice(data); }
     
-    // ---- حفظ ----
     let zmr_path = std::path::Path::new("models/zumar-v1").join("zumar-b1.58.zmr");
     let gguf_path = std::path::Path::new("models/zumar-v1").join("zumar-b1.58.gguf");
     std::fs::write(&zmr_path, &zmr_data)?;
@@ -410,20 +364,15 @@ fn export_formats(
     
     let zmr_mb = zmr_data.len() as f64 / 1_048_576.0;
     let gguf_mb = gguf_data.len() as f64 / 1_048_576.0;
-    
     println!("\n╔══════════════════════════════════════╗");
     println!("║  📦 EXPORT COMPLETE                  ║");
-    println!("╠══════════════════════════════════════╣");
-    println!("║  Original (FP32):  {:>8.1} MB        ║", orig_mb);
-    println!("║  .zmr (2-bit):     {:>8.1} MB        ║", zmr_mb);
-    println!("║  .gguf (2-bit):    {:>8.1} MB        ║", gguf_mb);
-    println!("║  Ratio:            {:>8.1}x smaller   ║", orig_mb / zmr_mb.max(0.1));
-    println!("╠══════════════════════════════════════╣");
-    println!("║  {}\x1b[0m", zmr_path.display());
-    println!("║  {}\x1b[0m", gguf_path.display());
+    println!("║  Original:  {:>8.1} MB               ║", orig_mb);
+    println!("║  .zmr:      {:>8.1} MB               ║", zmr_mb);
+    println!("║  .gguf:     {:>8.1} MB               ║", gguf_mb);
+    println!("║  Ratio:     {:>8.1}x smaller         ║", orig_mb / zmr_mb.max(0.1));
     println!("╚══════════════════════════════════════╝");
-    println!("\n\x1b[1;36m🚀 Chat:   cargo run -p core --release");
-    println!("🚀 llama:  ./llama-cli -m {} -p \"Hello\"\x1b[0m", gguf_path.display());
+    println!("\n🚀 Chat:  cargo run -p core --release");
+    println!("🚀 llama: ./llama-cli -m {} -p \"Hello\"", gguf_path.display());
     
     Ok(())
 }

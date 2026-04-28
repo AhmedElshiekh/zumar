@@ -30,6 +30,18 @@ pub struct ZumarModel {
     pub vocab_size: usize,
 }
 
+/// مرجع لـ packed block
+pub struct PackedBlockRef {
+    pub data: Vec<u8>,
+    pub scale: f32,
+}
+
+impl PackedBlockRef {
+    pub fn to_bitlinear(&self, shape: (usize, usize), device: &Device) -> Result<ZumarBitLinear> {
+        ZumarBitLinear::from_packed_block(&self.data, self.scale, shape, device)
+    }
+}
+
 impl ZumarBlock {
     pub fn new(
         in_dim: usize, num_experts: usize, top_k: usize, n_heads: usize, vs: VarBuilder,
@@ -59,6 +71,28 @@ impl ZumarBlock {
         let moe_out = self.moe.forward(&normed_2)?;
         residual_2 + moe_out
     }
+
+    /// إنشاء كتلة من packed blocks مباشرة
+    pub fn from_packed_blocks(
+        in_dim: usize, num_experts: usize, n_heads: usize,
+        blocks: &[PackedBlockRef], device: &Device,
+    ) -> Result<Self> {
+        let varmap = candle_nn::VarMap::new();
+        let vs = candle_nn::VarBuilder::from_varmap(&varmap, candle_core::DType::F32, device);
+        let pre_norm = candle_nn::layer_norm(in_dim, 1e-5, vs.pp("input_layernorm"))?;
+        let post_norm = candle_nn::layer_norm(in_dim, 1e-5, vs.pp("post_attention_layernorm"))?;
+        let attention = ZumarFlashAttention::new(n_heads, in_dim / n_heads);
+        Ok(Self {
+            pre_norm,
+            q_proj: blocks[0].to_bitlinear((in_dim, in_dim), device)?,
+            k_proj: blocks[1].to_bitlinear((in_dim, in_dim), device)?,
+            v_proj: blocks[2].to_bitlinear((in_dim, in_dim), device)?,
+            o_proj: blocks[3].to_bitlinear((in_dim, in_dim), device)?,
+            attention,
+            moe: ZumarMoE::from_packed_blocks(in_dim, num_experts, &blocks[4..], device)?,
+            post_norm,
+        })
+    }
 }
 
 impl ZumarModel {
@@ -83,6 +117,7 @@ impl ZumarModel {
         emb.unsqueeze(0)
     }
 
+    #[allow(dead_code)]
     pub fn embed_tokens(&self, token_ids: &[u32], device: &Device) -> Result<Tensor> {
         let input = Tensor::new(token_ids, device)?;
         let emb = self.embedding.forward(&input)?;
@@ -97,5 +132,32 @@ impl ZumarModel {
         }
         hidden_states = self.final_norm.forward(&hidden_states)?;
         self.lm_head.forward(&hidden_states)
+    }
+
+    /// بناء النموذج من packed blocks مباشرة (بدون safetensors)
+    pub fn from_packed_blocks(
+        vocab_size: usize, in_dim: usize, num_layers: usize,
+        num_experts: usize, n_heads: usize,
+        blocks: &[PackedBlockRef], device: &Device,
+    ) -> Result<Self> {
+        let varmap = candle_nn::VarMap::new();
+        let vs = candle_nn::VarBuilder::from_varmap(&varmap, candle_core::DType::F32, device);
+        let embedding = candle_nn::embedding(vocab_size, in_dim, vs.pp("model.embed_tokens"))?;
+        let final_norm = candle_nn::layer_norm(in_dim, 1e-5, vs.pp("model.norm"))?;
+        let lm_head = blocks[blocks.len() - 1].to_bitlinear((vocab_size, in_dim), device)?;
+        
+        let blocks_per_layer = 4 + 1 + num_experts;
+        let mut layers = Vec::new();
+        for i in 0..num_layers {
+            let start = 1 + i * blocks_per_layer;
+            let end = start + blocks_per_layer;
+            if end <= blocks.len() {
+                layers.push(ZumarBlock::from_packed_blocks(
+                    in_dim, num_experts, n_heads,
+                    &blocks[start..end], device,
+                )?);
+            }
+        }
+        Ok(Self { embedding, layers, final_norm, lm_head, hidden_size: in_dim, vocab_size })
     }
 }

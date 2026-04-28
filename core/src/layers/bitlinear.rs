@@ -2,6 +2,7 @@ use candle_core::{Tensor, Result, DType};
 use candle_nn::{Module, VarBuilder};
 use crate::kernels;
 
+#[allow(dead_code)]
 pub struct ZumarBitLinear {
     pub latent_weight: Tensor,
     pub quantized_weight: Option<Tensor>,
@@ -101,6 +102,23 @@ impl ZumarBitLinear {
         
         Ok(packed)
     }
+
+   // إنشاء طبقة من PackedBlock (بدون فك ضغط كامل)
+    pub fn from_packed_block(packed: &[u8], scale: f32, shape: (usize, usize), device: &candle_core::Device) -> Result<Self> {
+        let scale_tensor = Tensor::new(scale, device)?;
+        let dummy = Tensor::zeros(shape, DType::F32, device)?;
+        
+        Ok(Self {
+            latent_weight: dummy.clone(),
+            quantized_weight: Some(dummy),
+            bias: None,
+            scale: scale_tensor,
+            quantize: true,
+            packed_2bit: Some(packed.to_vec()),
+            weight_shape: shape,
+        })
+    }
+  
 }
 
 impl Module for ZumarBitLinear {

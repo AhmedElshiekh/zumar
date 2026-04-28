@@ -1,4 +1,4 @@
-use candle_core::{Tensor, Result, Device, Module};
+use candle_core::{Tensor, Result, Device};
 use candle_nn::{VarMap, Optimizer};
 use crate::layers::ZumarModel;
 use std::time::Instant;

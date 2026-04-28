@@ -1,6 +1,8 @@
-use candle_core::{Tensor, Result};
+use candle_core::{Tensor, Result, Device};
 use candle_nn::{Module, VarBuilder};
 use crate::layers::bitlinear::ZumarBitLinear;
+use crate::layers::PackedBlockRef;
+
 
 pub struct ZumarMoE {
     pub gate: ZumarBitLinear,
@@ -36,5 +38,20 @@ impl ZumarMoE {
         }
 
         output.reshape((b, s, h))
+    }
+    
+    
+    pub fn from_packed_blocks(
+        in_dim: usize,
+        num_experts: usize,
+        blocks: &[PackedBlockRef],
+        device: &Device,
+    ) -> Result<Self> {
+        let gate = blocks[0].to_bitlinear((num_experts, in_dim), device)?;
+        let mut experts = Vec::new();
+        for i in 0..num_experts {
+            experts.push(blocks[1 + i].to_bitlinear((in_dim, in_dim), device)?);
+        }
+        Ok(Self { gate, experts, num_experts, top_k: 2 })
     }
 }
