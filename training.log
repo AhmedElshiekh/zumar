@@ -1,4 +1,12 @@
    Compiling core v2.2.0 (/root/projects/zumar/core)
+warning: unused variable: `kv_heads`
+  --> core/src/main.rs:51:9
+   |
+51 |     let kv_heads: usize = 1;  // جديد: رأس واحد لـ K و V
+   |         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_kv_heads`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
 warning: type `TeacherConfig` is more private than the item `AutoTeacher::get_config`
    --> core/src/true_distill.rs:159:5
     |
@@ -13,14 +21,14 @@ note: but type `TeacherConfig` is only usable at visibility `pub(self)`
     = note: `#[warn(private_interfaces)]` on by default
 
 warning: fields `hidden_size` and `vocab_size` are never read
-  --> core/src/layers/mod.rs:29:9
+  --> core/src/layers/mod.rs:30:9
    |
-24 | pub struct ZumarModel {
+25 | pub struct ZumarModel {
    |            ---------- fields in this struct
 ...
-29 |     pub hidden_size: usize,
+30 |     pub hidden_size: usize,
    |         ^^^^^^^^^^^
-30 |     pub vocab_size: usize,
+31 |     pub vocab_size: usize,
    |         ^^^^^^^^^^
    |
    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
@@ -36,15 +44,6 @@ warning: associated items `from_zmr` and `to_packed_bytes` are never used
 ...
 75 |     pub fn to_packed_bytes(&self) -> Result<Vec<u8>> {
    |            ^^^^^^^^^^^^^^^
-
-warning: field `top_k` is never read
-  --> core/src/layers/moe.rs:11:9
-   |
- 7 | pub struct ZumarMoE {
-   |            -------- field in this struct
-...
-11 |     pub top_k: usize,
-   |         ^^^^^
 
 warning: struct `ZumarMambaConfig` is never constructed
  --> core/src/layers/mamba.rs:4:12
@@ -109,14 +108,17 @@ warning: associated items `new` and `decode` are never used
 27 |     pub fn decode(&self, ids: &[u32]) -> Result<String> {
    |            ^^^^^^
 
-warning: method `get_tokenizer_path` is never used
-  --> core/src/loader.rs:32:12
-   |
-21 | impl ZumarLoader {
-   | ---------------- method in this implementation
+warning: associated items `get_tokenizer_path` and `load_packed_embedding` are never used
+   --> core/src/loader.rs:33:12
+    |
+ 22 | impl ZumarLoader {
+    | ---------------- associated items in this implementation
 ...
-32 |     pub fn get_tokenizer_path(&self) -> String {
-   |            ^^^^^^^^^^^^^^^^^^
+ 33 |     pub fn get_tokenizer_path(&self) -> String {
+    |            ^^^^^^^^^^^^^^^^^^
+...
+169 |     pub fn load_packed_embedding(
+    |            ^^^^^^^^^^^^^^^^^^^^^
 
 warning: field `temperature` is never read
  --> core/src/true_distill.rs:9:9
@@ -140,17 +142,17 @@ warning: associated items `load` and `get_config` are never used
     |            ^^^^^^^^^^
 
 warning: call to `.clone()` on a reference in this situation does nothing
-    --> core/src/main.rs:123:104
+    --> core/src/main.rs:124:104
      |
- 123 | ...s(&[safetensors_path.clone()], candle_core::DType...
+ 124 | ...s(&[safetensors_path.clone()], candle_core::DType...
      |                        ^^^^^^^^
      |
      = note: the type `Path` does not implement `Clone`, so calling `clone` on `&Path` copies the reference, which does not do anything and can be removed
      = note: `#[warn(noop_method_call)]` on by default
 help: remove this redundant call
      |
- 123 -                     let vb = unsafe { candle_nn::VarBuilder::from_mmaped_safetensors(&[safetensors_path.clone()], candle_core::DType::F32, &device)? };
- 123 +                     let vb = unsafe { candle_nn::VarBuilder::from_mmaped_safetensors(&[safetensors_path], candle_core::DType::F32, &device)? };
+ 124 -                     let vb = unsafe { candle_nn::VarBuilder::from_mmaped_safetensors(&[safetensors_path.clone()], candle_core::DType::F32, &device)? };
+ 124 +                     let vb = unsafe { candle_nn::VarBuilder::from_mmaped_safetensors(&[safetensors_path], candle_core::DType::F32, &device)? };
      |
 help: if you meant to clone `Path`, implement `Clone` for it
     -->  /root/.rustup/toolchains/stable-aarch64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/path.rs:2313:1
@@ -159,9 +161,9 @@ help: if you meant to clone `Path`, implement `Clone` for it
 2314 | pub struct Path {
      |
 
-warning: `core` (bin "core") generated 14 warnings (run `cargo fix --bin "core" -p core` to apply 1 suggestion)
-    Finished `release` profile [optimized] target(s) in 27.29s
-     Running `/tmp/cargo_target/release/core distill 500 /data`
+warning: `core` (bin "core") generated 14 warnings (run `cargo fix --bin "core" -p core` to apply 2 suggestions)
+    Finished `release` profile [optimized] target(s) in 30.85s
+     Running `/tmp/cargo_target/release/core distill 20 /data`
 [1;35m
 
     ███████╗██╗   ██╗███╗   ███╗ █████╗ ██████╗ 
@@ -196,55 +198,15 @@ Usage:
 [1;32m✅ Found .zmr model (BitNet 1.58-bit)[0m
 [1;36m   ⚡ Direct 2-bit mode (50MB RAM, no decompression)[0m
    📊 .zmr: 1024d, 12L, 8 experts, vocab=50257
-   ✅ Stored 158 packed blocks (60.6 MB in RAM - NO DECOMPRESSION)
+   ✅ Stored 157 layers + embedding (60.6 MB in RAM)
 📚 Using built-in training data
 
-🔄 Section 1/5, epochs 1-100
+🔄 Section 1/1, epochs 1-20
 
 🧠 TRUE KNOWLEDGE DISTILLATION
-   Epochs: 100
+   Epochs: 20
    Samples: 100
    📖 Loading teacher metadata (lazy)...
    📊 Architecture: llama
    📊 Layers: 60, Hidden: 1024, Vocab: 50257
    ⚡ Lazy mode: loads 1 layer at a time
-
-  ✅ Ep 1: Loss 0.0000 | 73.8s
-
-  ✅ Ep 2: Loss 0.0000 | 140.5s
-
-  ✅ Ep 3: Loss 0.0000 | 215.2s
-
-  ✅ Ep 4: Loss 0.0000 | 292.0s
-
-  ✅ Ep 5: Loss 0.0000 | 373.8s
-
-  ✅ Ep 6: Loss 0.0000 | 451.3s
-
-  ✅ Ep 7: Loss 0.0000 | 511.7s
-
-  ✅ Ep 8: Loss 0.0000 | 582.1s
-
-  ✅ Ep 9: Loss 0.0000 | 655.8s
-
-  ✅ Ep 10: Loss 0.0000 | 719.9s
-
-  ✅ Ep 11: Loss 0.0000 | 782.8s
-
-  ✅ Ep 12: Loss 0.0000 | 845.3s
-
-  ✅ Ep 13: Loss 0.0000 | 905.8s
-
-  ✅ Ep 14: Loss 0.0000 | 966.2s
-
-  ✅ Ep 15: Loss 0.0000 | 1026.6s
-
-  ✅ Ep 16: Loss 0.0000 | 1088.7s
-
-  ✅ Ep 17: Loss 0.0000 | 1150.1s
-
-  ✅ Ep 18: Loss 0.0000 | 1212.4s
-
-  ✅ Ep 19: Loss 0.0000 | 1274.3s
-
-  ✅ Ep 20: Loss 0.0000 | 1336.0s

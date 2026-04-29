@@ -1,11 +1,12 @@
 use std::path::PathBuf;
 use std::process::Command;
-use candle_core::{Device, Result, DType};
+use candle_core::{Device, Result, DType, Tensor};
 use candle_nn::VarBuilder;
 use crate::layers::PackedBlockRef;
 
 pub struct ZumarLoader {
     pub packed_blocks: Option<Vec<PackedBlockRef>>,
+    pub packed_embedding: Option<PackedBlockRef>,
     base_path: PathBuf,
     teacher_dir: PathBuf,
     pub zmr_config: Option<ZmrConfig>,
@@ -26,7 +27,7 @@ impl ZumarLoader {
         base_p.push(relative_path);
         let mut teacher_p = path.clone();
         teacher_p.push("models/teacher");
-        Self { base_path: base_p, teacher_dir: teacher_p, zmr_config: None, packed_blocks: None }
+        Self { base_path: base_p, teacher_dir: teacher_p, zmr_config: None, packed_blocks: None, packed_embedding: None }
     }
 
     pub fn get_tokenizer_path(&self) -> String {
@@ -97,28 +98,30 @@ impl ZumarLoader {
         let mut packed_blocks = Vec::new();
 
         while offset + 8 <= data.len() {
-            let scale = f32::from_le_bytes([data[offset], data[offset+1], data[offset+2], data[offset+3]]);
-            offset += 4;
-            let num_elements = u32::from_le_bytes([data[offset], data[offset+1], data[offset+2], data[offset+3]]) as usize;
-            offset += 4;
-            let packed_len = (num_elements + 3) / 4;
-            if offset + packed_len > data.len() { break; }
-
-            // تخزين packed مباشرة (بدون فك ضغط!)
-            packed_blocks.push(PackedBlockRef {
-                data: data[offset..offset+packed_len].to_vec(),
-                scale,
-            });
-            offset += packed_len;
+          let scale = f32::from_le_bytes([data[offset], data[offset+1], data[offset+2], data[offset+3]]);
+          offset += 4;
+          let num_elements = u32::from_le_bytes([data[offset], data[offset+1], data[offset+2], data[offset+3]]) as usize;
+          offset += 4;
+          let packed_len = (num_elements + 3) / 4;
+          if offset + packed_len > data.len() { break; }
+          packed_blocks.push(PackedBlockRef {
+              data: data[offset..offset+packed_len].to_vec(),
+              scale,
+          });
+          offset += packed_len;
         }
 
-        self.packed_blocks = Some(packed_blocks);
+        if let Some(emb_block) = packed_blocks.first() {
+            self.packed_embedding = Some(emb_block.clone());
+        }
+      
+        self.packed_blocks = Some(packed_blocks[1..].to_vec());
         
-        let zmr_size_mb = data.len() as f64 / 1_048_576.0;
-        let blocks_count = self.packed_blocks.as_ref().map(|v| v.len()).unwrap_or(0);
-        println!("   ✅ Stored {} packed blocks ({:.1} MB in RAM - NO DECOMPRESSION)", blocks_count, zmr_size_mb);
-
-        // إرجاع فارغ - سنستخدم packed_blocks مباشرة
+        println!("   ✅ Stored {} layers + embedding ({:.1} MB in RAM)", 
+        self.packed_blocks.as_ref().map(|v| v.len()).unwrap_or(0),
+        data.len() as f64 / 1_048_576.0);
+        
+      // إرجاع فارغ - سنستخدم packed_blocks مباشرة
         Ok(VarBuilder::zeros(DType::F32, device))
     }
 
@@ -160,5 +163,31 @@ impl ZumarLoader {
             return Err(candle_core::Error::Msg(format!("Distillation error: {}", String::from_utf8_lossy(&output.stderr))));
         }
         Ok(())
+    }
+    
+    /// تحميل Embedding مضغوط (1-bit) لتوفير الرام
+    pub fn load_packed_embedding(
+      packed_data: &[u8],
+      scale: f32,
+      vocab_size: usize,
+      hidden_size: usize,
+      device: &Device,
+    ) -> Result<candle_nn::Embedding> {
+        let map = [-1.0f32, 0.0f32, 1.0f32, 0.0f32];
+        let total = vocab_size * hidden_size;
+        let mut weights = Vec::with_capacity(total);
+        
+        // فك ضغط 2-bit إلى FP32
+        for &byte in packed_data {
+            for bit in 0..4 {
+                if weights.len() >= total { break; }
+                let bits = (byte >> (bit * 2)) & 0b11;
+                weights.push(map[bits as usize] * scale);
+            }
+        }
+        weights.truncate(total);
+        
+        let tensor = Tensor::from_vec(weights, (vocab_size, hidden_size), device)?;
+        Ok(candle_nn::Embedding::new(tensor, hidden_size))
     }
 }

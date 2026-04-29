@@ -104,12 +104,12 @@ pub struct AutoTeacher {
     device: Device,
 }
 
-struct TeacherConfig {
-    embedding_key: String,
-    num_layers: usize,
-    hidden_dim: usize,
-    vocab_size: usize,
-    arch_type: String,
+pub struct TeacherConfig {
+    pub embedding_key: String,
+    pub num_layers: usize,
+    pub hidden_dim: usize,
+    pub vocab_size: usize,
+    pub arch_type: String,
 }
 
 impl AutoTeacher {
