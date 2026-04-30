@@ -57,9 +57,9 @@ async fn main() -> Result<()> {
     let device = router.route("Inference Task");
     
     match mode {
-        "distill" => {
+       "distill" => {
             print_usage();
-            println!("\n🧠 TRUE KNOWLEDGE DISTILLATION (AUTO-DETECT)\n");
+            println!("\n🧠 TRUE KNOWLEDGE DISTILLATION (ALL MODELS - CUMULATIVE)\n");
             
             let teacher_dir = std::path::Path::new("models/teacher");
             if !teacher_dir.exists() {
@@ -84,7 +84,7 @@ async fn main() -> Result<()> {
             });
             
             if teacher_files.is_empty() {
-                println!("\x1b[1;31m❌ No safetensors found in models/teacher/\x1b[0m");
+                println!("\x1b[1;31m❌ No safetensors found\x1b[0m");
                 return Ok(());
             }
             
@@ -97,100 +97,76 @@ async fn main() -> Result<()> {
             let total_epochs: usize = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(50);
             let save_interval = 100;
             
+            // ✅ أبعاد موحدة لجميع المعلمين
+            let unified_hidden: usize = hidden_size;
+            let unified_layers: usize = num_layers;
+            let unified_vocab: usize = vocab_size;
+            
+            // ✅ VarMap واحد تراكمي للجميع
+            let varmap = VarMap::new();
+            
             for (i, teacher_path) in teacher_files.iter().enumerate() {
                 println!("\n{}", "=".repeat(60));
-                println!("🧬 Model {}/{}: {}", i + 1, teacher_files.len(), teacher_path.file_name().unwrap().to_string_lossy());
+                println!("🧬 Model {}/{}: {}", i + 1, teacher_files.len(), 
+                    teacher_path.file_name().unwrap().to_string_lossy());
                 println!("{}", "=".repeat(60));
                 
-                // 🔍 اكتشف إعدادات المعلم تلقائياً
                 let teacher = match true_distill::AutoTeacher::load_lazy(
                     teacher_path.to_str().unwrap(), &device
                 ) {
-                    Ok(t) => t,
+                    Ok(t) => {
+                        let tc = t.get_config();
+                        println!("   📊 Teacher: {}d, {}L, {} vocab, {}", 
+                            tc.hidden_dim, tc.num_layers, tc.vocab_size, tc.arch_type);
+                        t
+                    },
                     Err(e) => {
-                        println!("\x1b[1;31m❌ Cannot load teacher: {}\x1b[0m", e);
+                        println!("\x1b[1;31m❌ Cannot load: {}\x1b[0m", e);
                         continue;
                     }
                 };
                 
-                let t_config = teacher.get_config();
-                let hidden_size = t_config.hidden_dim.min(1024);
-                let num_layers = t_config.num_layers;
-                let vocab_size = t_config.vocab_size.min(50257);
+                println!("   📊 Zumar:   {}d, {}L, {} vocab (unified)", 
+                    unified_hidden, unified_layers, unified_vocab);
+                drop(teacher);
                 
-                println!("   📊 Teacher: {}d, {}L, {} vocab, {}", 
-                    t_config.hidden_dim, t_config.num_layers, t_config.vocab_size, t_config.arch_type);
-                println!("   📊 Zumar:   {}d, {}L, {} vocab, {} experts", 
-                    hidden_size, num_layers, vocab_size, num_experts);
-                
-                drop(teacher); // حرر الذاكرة
-                
-                // ✅ تحميل الأوزان السابقة أو البدء من الصفر
-                let varmap = VarMap::new();
                 let vs = candle_nn::VarBuilder::from_varmap(&varmap, candle_core::DType::F32, &device);
-                
-                let zmr_path = std::path::Path::new("models/zumar-v1/zumar-b1.58.zmr");
-                let safetensors_path = std::path::Path::new("models/zumar-v1/model.safetensors");
-                
-                let mut model = if zmr_path.exists() {
-                    println!("\x1b[1;32m📥 Resuming from .zmr (continuing training)...\x1b[0m");
-                    let mut ldr = loader::ZumarLoader::new("models/zumar-v1");
-                    let _ = ldr.load_weights(&device)?;
-                    if let Some(ref packed) = ldr.packed_blocks {
-                        ZumarModel::from_packed_blocks(vocab_size, hidden_size, num_layers, num_experts, n_heads, packed, None, &device)?
-                    } else {
-                        println!("\x1b[1;33m⚠️  Failed to load .zmr, starting fresh\x1b[0m");
-                        ZumarModel::new(vocab_size, hidden_size, num_layers, num_experts, top_k, n_heads, vs.clone())?
-                    }
-                } else if safetensors_path.exists() {
-                    println!("\x1b[1;32m📥 Resuming from .safetensors (continuing training)...\x1b[0m");
-                    let vb = unsafe { candle_nn::VarBuilder::from_mmaped_safetensors(&[safetensors_path.clone()], candle_core::DType::F32, &device)? };
-                    ZumarModel::new(vocab_size, hidden_size, num_layers, num_experts, top_k, n_heads, vb)?
-                } else {
-                    println!("\x1b[1;33m🆕 No previous weights found. Starting fresh training...\x1b[0m");
-                    ZumarModel::new(vocab_size, hidden_size, num_layers, num_experts, top_k, n_heads, vs.clone())?
-                };
+                let mut model = ZumarModel::new(
+                    unified_vocab, unified_hidden, unified_layers, 
+                    num_experts, top_k, n_heads, vs.clone()
+                )?;
                 
                 let training_data = data::TrainingData::load(args.get(3).map(|s| s.as_str()));
                 let all_texts = training_data.repeat(10);
-                let mut all_ok = true;
                 
                 for chunk_start in (0..total_epochs).step_by(save_interval) {
                     let chunk_epochs = std::cmp::min(save_interval, total_epochs - chunk_start);
-                    println!("\n🔄 Section {}/{}, epochs {}-{}", 
-                        chunk_start / save_interval + 1, 
-                        (total_epochs + save_interval - 1) / save_interval, 
-                        chunk_start + 1, chunk_start + chunk_epochs);
                     
-                    let config = true_distill::DistillConfig { epochs: chunk_epochs, learning_rate: 0.001, temperature: 3.0 };
+                    let config = true_distill::DistillConfig { 
+                        epochs: chunk_epochs, learning_rate: 0.001, temperature: 3.0 
+                    };
                     let distiller = true_distill::TrueDistiller::new(config, device.clone());
                     
                     match distiller.distill(&mut model, &varmap, teacher_path.to_str().unwrap(), &all_texts) {
                         Ok(_) => {
-                            let global_epoch = chunk_start + chunk_epochs;
-                            let save_dir = std::path::Path::new("models/zumar-v1");
-                            std::fs::create_dir_all(save_dir).ok();
                             let save_path = std::path::Path::new("models/zumar-v1/model.safetensors");
+                            std::fs::create_dir_all(save_path.parent().unwrap()).ok();
                             varmap.save(save_path)?;
-                            if let Err(e) = varmap.save(&save_path) {
-                                println!("\x1b[1;31m⚠️  Save failed: {}\x1b[0m", e);
-                            } else {
-                                let size_mb = std::fs::metadata(&save_path).map(|m| m.len() as f64 / 1_048_576.0).unwrap_or(0.0);
-                                println!("\x1b[1;32m💾 Saved at epoch {} ({:.1} MB)\x1b[0m", global_epoch, size_mb);
-                            }
                         }
-                        Err(e) => { println!("\x1b[1;31m❌ Failed: {}\x1b[0m", e); all_ok = false; break; }
+                        Err(e) => println!("\x1b[1;31m❌ Failed: {}\x1b[0m", e),
                     }
                 }
                 
-                if all_ok {
-                    println!("\n\x1b[1;32m✅ Training complete ({} epochs total)\x1b[0m", total_epochs);
-                    println!("\x1b[1;33m📦 Auto-exporting to .zmr + .gguf...\x1b[0m");
-                    export_formats(&varmap, &device, vocab_size, hidden_size, num_layers, num_experts, top_k, n_heads)?;
-                    println!("\n\x1b[1;36m🚀 Run: cargo run -p core --release\x1b[0m");
-                    break;
-                }
+                println!("✅ Model {}/{} complete", i + 1, teacher_files.len());
             }
+            
+            // ✅ pack تلقائي بعد كل المعلمين
+            println!("\n\x1b[1;33m📦 Auto-exporting to .zmr + .gguf...\x1b[0m");
+            export_formats(&varmap, &device, unified_vocab, unified_hidden, unified_layers, num_experts, top_k, n_heads)?;
+            
+            println!("\n\x1b[1;32m🎉 ALL {} TEACHERS DISTILLED!\x1b[0m", teacher_files.len());
+            println!("   📦 model.safetensors + zumar-b1.58.zmr + zumar-b1.58.gguf");
+            println!("\x1b[1;36m🚀 Run: cargo run -p core --release\x1b[0m");
         }
         
         "pack" => {
@@ -248,6 +224,14 @@ async fn main() -> Result<()> {
                           };
                           
                           let t_config = teacher.get_config();
+
+                          // ✅ تخطي المعلم غير المتوافق
+                          if t_config.arch_type == "skip" || t_config.num_layers == 0 {
+                              println!("\x1b[1;33m   ⚠️  Skipping incompatible model\x1b[0m");
+                              drop(teacher);
+                              continue;
+                          }
+
                           let h = t_config.hidden_dim.min(1024);
                           let l = t_config.num_layers;
                           let v = t_config.vocab_size.min(50257);
