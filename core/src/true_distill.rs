@@ -84,8 +84,16 @@ impl TrueDistiller {
                 }
             }
 
+            // ✅ حفظ الأوزان بعد كل Epoch
+            let save_dir = std::path::Path::new("models/zumar-v1");
+            std::fs::create_dir_all(save_dir).ok();
+            let save_path = save_dir.join("model.safetensors");
+            if let Err(e) = varmap.save(&save_path) {
+                eprintln!("  ⚠️  Save warning: {}", e);
+            }
+
             println!();
-            println!("  ✅ Ep {}: Loss {:.4} | {:.1}s", 
+            println!("  ✅ Ep {}: Loss {:.4} | {:.1}s | 💾 saved", 
                 epoch + 1, loss_sum / count.max(1) as f32, start.elapsed().as_secs_f64());
         }
 
@@ -95,7 +103,7 @@ impl TrueDistiller {
 }
 
 // ============================================================
-// مُحَمِّل تلقائي مع تحميل تدريجي (Lazy Loading)
+// مُحَمِّل تلقائي مع تحميل تدريجي - يدعم كل المعماريات
 // ============================================================
 pub struct AutoTeacher {
     data: Vec<u8>,
@@ -110,10 +118,10 @@ pub struct TeacherConfig {
     pub hidden_dim: usize,
     pub vocab_size: usize,
     pub arch_type: String,
+    pub prefix_format: String,
 }
 
 impl AutoTeacher {
-    /// تحميل تدريجي (يقرأ metadata فقط - بدون تحميل الأوزان)
     pub fn load_lazy(path: &str, device: &Device) -> Result<Self> {
         println!("   📖 Loading teacher metadata (lazy)...");
         
@@ -135,27 +143,6 @@ impl AutoTeacher {
         Ok(Self { data, header: Some(header), config, device: device.clone() })
     }
 
-    /// تحميل كامل (قديم - يستهلك ذاكرة)
-    pub fn load(path: &str, device: &Device) -> Result<Self> {
-        println!("   📖 Loading teacher (full)...");
-        
-        let data = std::fs::read(path)
-            .map_err(|e| candle_core::Error::Msg(format!("Cannot read: {}", e)))?;
-
-        let header_size = u64::from_le_bytes(data[0..8].try_into().unwrap()) as usize;
-        let raw_header = &data[8..8 + header_size];
-        let header: serde_json::Value = serde_json::from_slice(raw_header)
-            .map_err(|e| candle_core::Error::Msg(format!("JSON error: {}", e)))?;
-
-        let config = Self::detect_architecture_from_header(&header);
-        
-        println!("   📊 Architecture: {}", config.arch_type);
-        println!("   📊 Layers: {}, Hidden: {}, Vocab: {}", 
-            config.num_layers, config.hidden_dim, config.vocab_size);
-
-        Ok(Self { data, header: Some(header), config, device: device.clone() })
-    }
-
     pub fn get_config(&self) -> &TeacherConfig {
         &self.config
     }
@@ -164,89 +151,87 @@ impl AutoTeacher {
         let keys: Vec<String> = header.as_object()
             .map(|obj| obj.keys().cloned().collect())
             .unwrap_or_default();
-        
         let all_keys = keys.join(" ");
-        
-        // GPT-2
-        if all_keys.contains("wte.weight") && all_keys.contains("h.0.ln_1.weight") {
-            let num_layers = keys.iter().filter(|k| k.contains(".ln_1.weight")).count();
-            let hidden_dim = header.get("wte.weight")
-                .and_then(|v| v.get("shape"))
-                .and_then(|v| v.as_array())
-                .and_then(|a| a.get(1))
-                .and_then(|v| v.as_u64())
-                .unwrap_or(768) as usize;
-            let vocab_size = header.get("wte.weight")
-                .and_then(|v| v.get("shape"))
-                .and_then(|v| v.as_array())
-                .and_then(|a| a.get(0))
-                .and_then(|v| v.as_u64())
-                .unwrap_or(50257) as usize;
-            
+
+        // DistilGPT-2 (transformer.h.X)
+        if all_keys.contains("transformer.h.0.ln_1.weight") {
+            let num_layers = keys.iter()
+                .filter(|k| k.contains(".ln_1.weight") && k.contains("transformer.h."))
+                .count();
+            let hidden_dim = header.get("transformer.h.0.attn.c_attn.weight")
+                .and_then(|v| v.get("shape")).and_then(|v| v.as_array())
+                .and_then(|a| a.get(1)).and_then(|v| v.as_u64()).unwrap_or(768) as usize;
+            let vocab_size = header.get("transformer.wte.weight")
+                .and_then(|v| v.get("shape")).and_then(|v| v.as_array())
+                .and_then(|a| a.get(0)).and_then(|v| v.as_u64()).unwrap_or(50257) as usize;
             return TeacherConfig {
-                embedding_key: "wte.weight".to_string(),
-                num_layers,
-                hidden_dim,
-                vocab_size,
+                embedding_key: "transformer.wte.weight".to_string(),
+                num_layers, hidden_dim, vocab_size,
                 arch_type: "gpt2".to_string(),
+                prefix_format: "transformer.h.{i}".to_string(),
             };
         }
-        
-        // Llama-style (BitNet, Mistral, etc.)
+
+        // GPT-2 (h.X)
+        if all_keys.contains("h.0.ln_1.weight") && all_keys.contains("wte.weight") {
+            let num_layers = keys.iter().filter(|k| k.contains(".ln_1.weight")).count();
+            let hidden_dim = header.get("wte.weight")
+                .and_then(|v| v.get("shape")).and_then(|v| v.as_array())
+                .and_then(|a| a.get(1)).and_then(|v| v.as_u64()).unwrap_or(768) as usize;
+            let vocab_size = header.get("wte.weight")
+                .and_then(|v| v.get("shape")).and_then(|v| v.as_array())
+                .and_then(|a| a.get(0)).and_then(|v| v.as_u64()).unwrap_or(50257) as usize;
+            return TeacherConfig {
+                embedding_key: "wte.weight".to_string(),
+                num_layers, hidden_dim, vocab_size,
+                arch_type: "gpt2".to_string(),
+                prefix_format: "h.{i}".to_string(),
+            };
+        }
+
+        // Llama-style
         if all_keys.contains("model.embed_tokens.weight") 
             && all_keys.contains("model.layers.0.self_attn.q_proj.weight") 
         {
             let num_layers = keys.iter()
                 .filter(|k| k.contains("self_attn.q_proj.weight") && k.contains("model.layers."))
                 .count();
-            
             let hidden_dim = header.get("model.layers.0.self_attn.q_proj.weight")
-                .and_then(|v| v.get("shape"))
-                .and_then(|v| v.as_array())
-                .and_then(|a| a.get(1))
-                .and_then(|v| v.as_u64())
-                .unwrap_or(2560) as usize;
+                .and_then(|v| v.get("shape")).and_then(|v| v.as_array())
+                .and_then(|a| a.get(1)).and_then(|v| v.as_u64()).unwrap_or(2560) as usize;
             let vocab_size = header.get("model.embed_tokens.weight")
-                .and_then(|v| v.get("shape"))
-                .and_then(|v| v.as_array())
-                .and_then(|a| a.get(0))
-                .and_then(|v| v.as_u64())
-                .unwrap_or(128256) as usize;
-            
+                .and_then(|v| v.get("shape")).and_then(|v| v.as_array())
+                .and_then(|a| a.get(0)).and_then(|v| v.as_u64()).unwrap_or(128256) as usize;
             return TeacherConfig {
                 embedding_key: "model.embed_tokens.weight".to_string(),
                 num_layers,
-                hidden_dim: hidden_dim.min(1024), // حد أمان
+                hidden_dim: hidden_dim.min(1024),
                 vocab_size: vocab_size.min(50257),
                 arch_type: "llama".to_string(),
+                prefix_format: "model.layers.{i}".to_string(),
             };
         }
-        
-        // افتراضي - DistilGPT-2
+
+        // افتراضي
         TeacherConfig {
             embedding_key: "wte.weight".to_string(),
-            num_layers: 6,
-            hidden_dim: 768,
-            vocab_size: 50257,
+            num_layers: 6, hidden_dim: 768, vocab_size: 50257,
             arch_type: "gpt2".to_string(),
+            prefix_format: "h.{i}".to_string(),
         }
     }
 
-    /// تحميل تنسور واحد فقط عند الحاجة
     fn load_tensor(&self, name: &str) -> Result<Tensor> {
         let header = self.header.as_ref()
             .ok_or_else(|| candle_core::Error::Msg("No header loaded".to_string()))?;
-        
         let info = header.get(name)
             .ok_or_else(|| candle_core::Error::Msg(format!("Tensor not found: {}", name)))?;
-        
         let offsets = info["data_offsets"].as_array().unwrap();
         let start = offsets[0].as_u64().unwrap() as usize;
         let end = offsets[1].as_u64().unwrap() as usize;
         let shape: Vec<usize> = info["shape"].as_array().unwrap()
             .iter().map(|v| v.as_u64().unwrap() as usize).collect();
         let dtype = info.get("dtype").and_then(|d| d.as_str()).unwrap_or("F32");
-        
         let header_size = u64::from_le_bytes(self.data[0..8].try_into().unwrap()) as usize;
         let raw = &self.data[8 + header_size + start..8 + header_size + end];
         
@@ -267,74 +252,58 @@ impl AutoTeacher {
                 Tensor::from_vec(f32s, shape, &self.device)?
             }
         };
-        
         Ok(tensor)
     }
 
-    /// Forward pass تدريجي (يحمل طبقة واحدة فقط في الذاكرة)
     pub fn predict(&self, text: &str) -> Result<Vec<f32>> {
         let tokens: Vec<u32> = text.chars()
             .map(|c| c as u32 % self.config.vocab_size as u32)
             .collect();
-        
         if tokens.is_empty() {
             return Ok(vec![0.0; self.config.vocab_size]);
         }
 
-        // تحميل embedding فقط
         let wte = self.load_tensor(&self.config.embedding_key)?;
         let last_token = (tokens[tokens.len() - 1] as usize) % wte.dim(0)?;
         let x = wte.get(last_token)?;
         let mut h = x.unsqueeze(0)?;
         drop(wte);
-
         let safe_dim = self.config.hidden_dim.min(1024);
 
         for i in 0..self.config.num_layers {
+            let p = self.config.prefix_format.replace("{i}", &i.to_string());
+            
             if self.config.arch_type == "llama" {
-                let p = format!("model.layers.{}", i);
-                
-                let q = self.load_tensor(&format!("{}.self_attn.q_proj.weight", p))?;
-                let k = self.load_tensor(&format!("{}.self_attn.k_proj.weight", p))?;
-                let v = self.load_tensor(&format!("{}.self_attn.v_proj.weight", p))?;
-                let o = self.load_tensor(&format!("{}.self_attn.o_proj.weight", p))?;
-                
-                let qs = q.narrow(0, 0, safe_dim)?.narrow(1, 0, safe_dim)?;
-                let ks = k.narrow(0, 0, safe_dim)?.narrow(1, 0, safe_dim)?;
-                let vs = v.narrow(0, 0, safe_dim)?.narrow(1, 0, safe_dim)?;
-                let os = o.narrow(0, 0, safe_dim)?.narrow(1, 0, safe_dim)?;
-                
-                let qo = h.matmul(&qs.t()?)?;
-                let ko = h.matmul(&ks.t()?)?;
-                let vo = h.matmul(&vs.t()?)?;
-                
-                drop(q); drop(k); drop(v);
-                
-                let attn = qo.matmul(&ko.t()?)?;
-                let attn = candle_nn::ops::softmax(&attn, 1)?;
-                h = attn.matmul(&vo)?;
-                h = h.matmul(&os.t()?)?;
-                
-                drop(o); drop(qo); drop(ko); drop(vo); drop(attn);
+                if let (Ok(q), Ok(k), Ok(v), Ok(o)) = (
+                    self.load_tensor(&format!("{}.self_attn.q_proj.weight", p)),
+                    self.load_tensor(&format!("{}.self_attn.k_proj.weight", p)),
+                    self.load_tensor(&format!("{}.self_attn.v_proj.weight", p)),
+                    self.load_tensor(&format!("{}.self_attn.o_proj.weight", p)),
+                ) {
+                    let qs = q.narrow(0, 0, safe_dim)?.narrow(1, 0, safe_dim)?;
+                    let ks = k.narrow(0, 0, safe_dim)?.narrow(1, 0, safe_dim)?;
+                    let vs = v.narrow(0, 0, safe_dim)?.narrow(1, 0, safe_dim)?;
+                    let os = o.narrow(0, 0, safe_dim)?.narrow(1, 0, safe_dim)?;
+                    let qo = h.matmul(&qs.t()?)?;
+                    let ko = h.matmul(&ks.t()?)?;
+                    let vo = h.matmul(&vs.t()?)?;
+                    let attn = candle_nn::ops::softmax(&qo.matmul(&ko.t()?)?, 1)?;
+                    h = attn.matmul(&vo)?;
+                    h = h.matmul(&os.t()?)?;
+                }
             } else {
-                // GPT-2: c_attn = Q+K+V
-                let p = format!("h.{}", i);
                 if let Ok(c_attn) = self.load_tensor(&format!("{}.attn.c_attn.weight", p)) {
                     let dim = c_attn.dim(0)?.min(safe_dim);
                     let slice = c_attn.narrow(0, 0, dim)?.narrow(1, 0, safe_dim)?;
                     h = h.matmul(&slice.t()?)?;
-                    drop(c_attn);
                 }
             }
-            
             h = h.relu()?;
         }
 
         let wte = self.load_tensor(&self.config.embedding_key)?;
         let ws = wte.narrow(1, 0, safe_dim)?;
         let logits = h.matmul(&ws.t()?)?;
-        drop(wte);
-        
         logits.flatten_all()?.to_vec1::<f32>()
     }
 }

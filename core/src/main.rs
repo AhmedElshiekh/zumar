@@ -170,7 +170,8 @@ async fn main() -> Result<()> {
                             let global_epoch = chunk_start + chunk_epochs;
                             let save_dir = std::path::Path::new("models/zumar-v1");
                             std::fs::create_dir_all(save_dir).ok();
-                            let save_path = save_dir.join("model.safetensors");
+                            let save_path = std::path::Path::new("models/zumar-v1/model.safetensors");
+                            varmap.save(save_path)?;
                             if let Err(e) = varmap.save(&save_path) {
                                 println!("\x1b[1;31m⚠️  Save failed: {}\x1b[0m", e);
                             } else {

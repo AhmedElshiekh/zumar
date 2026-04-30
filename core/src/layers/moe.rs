@@ -6,8 +6,8 @@ use std::collections::HashMap;
 
 pub struct ZumarMoE {
     pub gate: ZumarBitLinear,
-    pub experts: Vec<ZumarBitLinear>,        // للتوافق مع التدريب
-    pub packed_experts: Vec<PackedBlockRef>,  // للـ Sparse MoE
+    pub experts: Vec<ZumarBitLinear>,
+    pub packed_experts: Vec<PackedBlockRef>,
     pub cached_experts: HashMap<usize, ZumarBitLinear>,
     pub num_experts: usize,
     pub top_k: usize,
@@ -40,7 +40,6 @@ impl ZumarMoE {
                 )?;
                 self.cached_experts.insert(idx, expert);
             } else if idx < self.experts.len() {
-                // استخدام الخبراء المحملة مسبقاً (للتدريب)
                 return Ok(&self.experts[idx]);
             }
         }
@@ -50,28 +49,22 @@ impl ZumarMoE {
     }
 
     pub fn forward(&mut self, x: &Tensor) -> Result<Tensor> {
-      let (b, s, h) = x.dims3()?;
-      let flat_dim = b * s;
-      let x_flat = x.reshape((flat_dim, h))?;
-  
-      let router_logits = self.gate.forward(&x_flat)?;
-      
-      // ✅ تشخيص
-      eprintln!("MoE forward: experts={}, packed={}, cached={}, top_k={}", 
-          self.experts.len(), self.packed_experts.len(), self.cached_experts.len(), self.top_k);
-      
-      let routing_probs = candle_nn::ops::softmax(&router_logits, 1)?;
-      let mut output = x_flat.zeros_like()?;
-      
-      for idx in 0..self.top_k.min(self.num_experts) {
-          eprintln!("MoE: trying expert {}", idx);
-          let expert = self.get_expert(idx)?;
-          let expert_out = expert.forward(&x_flat)?;
-          eprintln!("MoE: expert {} output sum: {}", idx, expert_out.sum_all()?.to_scalar::<f32>()?);
-          let w = routing_probs.narrow(1, idx, 1)?;
-          output = (output + expert_out.broadcast_mul(&w)?)?;
-      }
-  
-      output.reshape((b, s, h))
-  }
+        let (b, s, h) = x.dims3()?;
+        let flat_dim = b * s;
+        let x_flat = x.reshape((flat_dim, h))?;
+
+        let router_logits = self.gate.forward(&x_flat)?;
+        let routing_probs = candle_nn::ops::softmax(&router_logits, 1)?;
+
+        let mut output = x_flat.zeros_like()?;
+        
+        for idx in 0..self.top_k.min(self.num_experts) {
+            let expert = self.get_expert(idx)?;
+            let expert_out = expert.forward(&x_flat)?;
+            let w = routing_probs.narrow(1, idx, 1)?;
+            output = (output + expert_out.broadcast_mul(&w)?)?;
+        }
+
+        output.reshape((b, s, h))
+    }
 }
