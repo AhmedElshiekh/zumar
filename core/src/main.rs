@@ -57,118 +57,21 @@ async fn main() -> Result<()> {
     let device = router.route("Inference Task");
     
     match mode {
-       "distill" => {
+        "distill" => {
             print_usage();
             println!("\n🧠 TRUE KNOWLEDGE DISTILLATION (ALL MODELS - CUMULATIVE)\n");
             
-            let teacher_dir = std::path::Path::new("models/teacher");
-            if !teacher_dir.exists() {
-                println!("\x1b[1;31m❌ models/teacher/ not found\x1b[0m");
-                return Ok(());
-            }
+            distill_runner(
+              &args, &device, 
+              vocab_size, hidden_size, 
+              num_layers, num_experts, 
+              top_k, n_heads
+            )?;
             
-            let mut teacher_files: Vec<std::path::PathBuf> = Vec::new();
-            if let Ok(entries) = std::fs::read_dir(teacher_dir) {
-                for entry in entries.flatten() {
-                    let path = entry.path();
-                    if path.extension().map_or(false, |e| e == "safetensors") {
-                        teacher_files.push(path);
-                    }
-                }
-            }
-            
-            teacher_files.sort_by(|a, b| {
-                let sa = std::fs::metadata(a).map(|m| m.len()).unwrap_or(0);
-                let sb = std::fs::metadata(b).map(|m| m.len()).unwrap_or(0);
-                sb.cmp(&sa)
-            });
-            
-            if teacher_files.is_empty() {
-                println!("\x1b[1;31m❌ No safetensors found\x1b[0m");
-                return Ok(());
-            }
-            
-            println!("\x1b[1;32m📂 Found {} teacher model(s):\x1b[0m", teacher_files.len());
-            for f in &teacher_files {
-                let size = std::fs::metadata(f).map(|m| m.len() as f64 / 1_048_576.0).unwrap_or(0.0);
-                println!("   📄 {} ({:.1} MB)", f.file_name().unwrap().to_string_lossy(), size);
-            }
-            
-            let total_epochs: usize = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(50);
-            let save_interval = 100;
-            
-            // ✅ أبعاد موحدة لجميع المعلمين
-            let unified_hidden: usize = hidden_size;
-            let unified_layers: usize = num_layers;
-            let unified_vocab: usize = vocab_size;
-            
-            // ✅ VarMap واحد تراكمي للجميع
-            let varmap = VarMap::new();
-            
-            for (i, teacher_path) in teacher_files.iter().enumerate() {
-                println!("\n{}", "=".repeat(60));
-                println!("🧬 Model {}/{}: {}", i + 1, teacher_files.len(), 
-                    teacher_path.file_name().unwrap().to_string_lossy());
-                println!("{}", "=".repeat(60));
-                
-                let teacher = match true_distill::AutoTeacher::load_lazy(
-                    teacher_path.to_str().unwrap(), &device
-                ) {
-                    Ok(t) => {
-                        let tc = t.get_config();
-                        println!("   📊 Teacher: {}d, {}L, {} vocab, {}", 
-                            tc.hidden_dim, tc.num_layers, tc.vocab_size, tc.arch_type);
-                        t
-                    },
-                    Err(e) => {
-                        println!("\x1b[1;31m❌ Cannot load: {}\x1b[0m", e);
-                        continue;
-                    }
-                };
-                
-                println!("   📊 Zumar:   {}d, {}L, {} vocab (unified)", 
-                    unified_hidden, unified_layers, unified_vocab);
-                drop(teacher);
-                
-                let vs = candle_nn::VarBuilder::from_varmap(&varmap, candle_core::DType::F32, &device);
-                let mut model = ZumarModel::new(
-                    unified_vocab, unified_hidden, unified_layers, 
-                    num_experts, top_k, n_heads, vs.clone()
-                )?;
-                
-                let training_data = data::TrainingData::load(args.get(3).map(|s| s.as_str()));
-                let all_texts = training_data.repeat(10);
-                
-                for chunk_start in (0..total_epochs).step_by(save_interval) {
-                    let chunk_epochs = std::cmp::min(save_interval, total_epochs - chunk_start);
-                    
-                    let config = true_distill::DistillConfig { 
-                        epochs: chunk_epochs, learning_rate: 0.001, temperature: 3.0 
-                    };
-                    let distiller = true_distill::TrueDistiller::new(config, device.clone());
-                    
-                    match distiller.distill(&mut model, &varmap, teacher_path.to_str().unwrap(), &all_texts) {
-                        Ok(_) => {
-                            let save_path = std::path::Path::new("models/zumar-v1/model.safetensors");
-                            std::fs::create_dir_all(save_path.parent().unwrap()).ok();
-                            varmap.save(save_path)?;
-                        }
-                        Err(e) => println!("\x1b[1;31m❌ Failed: {}\x1b[0m", e),
-                    }
-                }
-                
-                println!("✅ Model {}/{} complete", i + 1, teacher_files.len());
-            }
-            
-            // ✅ pack تلقائي بعد كل المعلمين
-            println!("\n\x1b[1;33m📦 Auto-exporting to .zmr + .gguf...\x1b[0m");
-            export_formats(&varmap, &device, unified_vocab, unified_hidden, unified_layers, num_experts, top_k, n_heads)?;
-            
-            println!("\n\x1b[1;32m🎉 ALL {} TEACHERS DISTILLED!\x1b[0m", teacher_files.len());
             println!("   📦 model.safetensors + zumar-b1.58.zmr + zumar-b1.58.gguf");
             println!("\x1b[1;36m🚀 Run: cargo run -p core --release\x1b[0m");
         }
-        
+
         "pack" => {
             println!("\n📦 EXPORTING TO .zmr + .gguf (BitNet 1.58-bit)\n");
             let varmap = candle_nn::VarMap::new();
@@ -192,215 +95,131 @@ async fn main() -> Result<()> {
         "help" | "--help" | "-h" => { print_usage(); }
         
         _ => {
-          println!("\n💬 Chat Mode\n");
-          
-          // ✅ تحقق من وجود الأوزان أولاً
-          let zmr_path = std::path::Path::new("models/zumar-v1/zumar-b1.58.zmr");
-          let safetensors_path = std::path::Path::new("models/zumar-v1/model.safetensors");
-          
-          // ✅ إذا لم توجد أي أوزان، شغّل التقطير المدمج
-          if !zmr_path.exists() && !safetensors_path.exists() {
-              println!("\x1b[1;33m⚠️  No Zumar weights found.\x1b[0m");
-              println!("\x1b[1;36m🔍 Searching for teacher model...\x1b[0m");
-              
-              let teacher_dir = std::path::Path::new("models/teacher");
-              let mut found_teacher = false;
-              
-              if let Ok(entries) = std::fs::read_dir(teacher_dir) {
-                  for entry in entries.flatten() {
-                      let path = entry.path();
-                      if path.extension().map_or(false, |e| e == "safetensors") {
-                          println!("\x1b[1;32m✅ Found teacher: {}\x1b[0m", path.file_name().unwrap().to_string_lossy());
-                          println!("\x1b[1;36m🧬 Running built-in distillation (100 epochs)...\x1b[0m");
-                          
-                          let teacher = match true_distill::AutoTeacher::load_lazy(
-                              path.to_str().unwrap(), &device
-                          ) {
-                              Ok(t) => t,
-                              Err(e) => {
-                                  println!("\x1b[1;31m❌ Cannot load teacher: {}\x1b[0m", e);
-                                  continue;
-                              }
-                          };
-                          
-                          let t_config = teacher.get_config();
-
-                          // ✅ تخطي المعلم غير المتوافق
-                          if t_config.arch_type == "skip" || t_config.num_layers == 0 {
-                              println!("\x1b[1;33m   ⚠️  Skipping incompatible model\x1b[0m");
-                              drop(teacher);
-                              continue;
-                          }
-
-                          let h = t_config.hidden_dim.min(1024);
-                          let l = t_config.num_layers;
-                          let v = t_config.vocab_size.min(50257);
-                          drop(teacher);
-                          
-                          let varmap = VarMap::new();
-                          let vs = candle_nn::VarBuilder::from_varmap(&varmap, candle_core::DType::F32, &device);
-                          let mut model = ZumarModel::new(v, h, l, num_experts, top_k, n_heads, vs.clone())?;
-                          
-                          let config = true_distill::DistillConfig { 
-                              epochs: 100, 
-                              learning_rate: 0.001, 
-                              temperature: 3.0 
-                          };
-                          let distiller = true_distill::TrueDistiller::new(config, device.clone());
-                          let training_data = data::TrainingData::load(None);
-                          let all_texts = training_data.repeat(10);
-                          
-                          match distiller.distill(&mut model, &varmap, path.to_str().unwrap(), &all_texts) {
-                              Ok(_) => {
-                                  let save_dir = std::path::Path::new("models/zumar-v1");
-                                  std::fs::create_dir_all(save_dir)?;
-                                  varmap.save(save_dir.join("model.safetensors"))?;
-                                  export_formats(&varmap, &device, v, h, l, num_experts, top_k, n_heads)?;
-                                  println!("\x1b[1;32m✅ Distillation complete!\x1b[0m");
-                                  found_teacher = true;
-                                  break;
-                              }
-                              Err(e) => {
-                                  println!("\x1b[1;31m❌ Distillation failed: {}\x1b[0m", e);
-                              }
-                          }
-                      }
-                  }
-              }
-              
-              if !found_teacher {
-                  println!("\x1b[1;31m❌ No teacher model found in models/teacher/\x1b[0m");
-                  println!("\x1b[1;33m   Place a .safetensors model there.\x1b[0m");
-                  return Ok(());
-              }
-          }
-          
-          // ✅ تحميل الأوزان (الموجودة أو المقطرة حديثاً)
-          let mut loader = loader::ZumarLoader::new("models/zumar-v1");
-          let _ = loader.load_weights(&device)?;
-          
-          let (v, h, l, e) = if let Some(cfg) = loader.get_zmr_config() {
-              (cfg.vocab_size, cfg.hidden_size, cfg.num_layers, cfg.num_experts)
-          } else {
-              (vocab_size, hidden_size, num_layers, num_experts)
-          };
-          
-          println!("🔧 Building model ({}d, {}L, {} experts)...", h, l, e);
-          
-          let mut model = if let Some(ref packed) = loader.packed_blocks {
-              println!("   ⚡ Direct 2-bit mode ({} blocks)", packed.len());
-              ZumarModel::from_packed_blocks(
-                  v, h, l, e, n_heads, 
-                  packed,
-                  loader.packed_embedding.as_ref(),
-                  &device,
-              )?
-          } else {
-              let safetensors_path = std::path::Path::new("models/zumar-v1/model.safetensors");
-              if safetensors_path.exists() {
-                  println!("   📦 Using .safetensors (FP32)");
-                  let vb = unsafe { 
-                      candle_nn::VarBuilder::from_mmaped_safetensors(
-                          &[safetensors_path], candle_core::DType::F32, &device
-                      )? 
-                  };
-                  ZumarModel::new(v, h, l, e, top_k, n_heads, vb)?
-              } else {
-                  println!("\x1b[1;31m❌ No model found\x1b[0m");
-                  return Ok(());
-              }
-          };
-          
-          println!("✅ Ready.\n");
-          
-          let temperature: f64 = 0.8;
-          let max_tokens: usize = 120;
-          let penalty: f32 = 1.2;
-          
-          loop {
-              print!("\x1b[1;32mYou>\x1b[0m ");
-              io::stdout().flush().ok();
-              let mut input = String::new();
-              if io::stdin().read_line(&mut input).is_err() { break; }
-              let prompt = input.trim();
-              if prompt == "exit" || prompt == "quit" { break; }
-              if prompt.is_empty() { continue; }
-              
-              let tokens: Vec<u32> = prompt.chars().map(|c| (c as u32 % 256) + 3).collect();
-              let mut current = *tokens.last().unwrap_or(&1);
-              let start = std::time::Instant::now();
-              let mut generated = Vec::new();
-              
-              print!("\x1b[1;36mZumar>\x1b[0m ");
-              io::stdout().flush().ok();
-              
-              for _ in 0..max_tokens {
-              // ... داخل حلقة for _ in 0..max_tokens ...
-
-                  // let emb = match model.embed(current, &device) {
-                  //     Ok(e) => {
-                  //         // التشخيص 1: هل الـ embedding يعمل؟
-                  //         eprintln!("DEBUG: emb sum={}", e.sum_all().unwrap().to_scalar::<f32>().unwrap());
-                  //         e
-                  //     },
-                  //     Err(e) => { eprintln!("DEBUG: embed error={}", e); break; }
-                  // };
-                  
-                  // let out = match model.forward(&emb) {
-                  //     Ok(o) => {
-                  //         // التشخيص 2: هل الـ forward pass ينتج قيماً؟
-                  //         let s = o.sum_all().unwrap().to_scalar::<f32>().unwrap();
-                  //         eprintln!("DEBUG: forward sum={}", s);
-                  //         if s == 0.0 { eprintln!("DEBUG: forward output IS ZERO!") }
-                  //         o
-                  //     },
-                  //     Err(e) => { eprintln!("DEBUG: forward error={}", e); break; }
-                  // };
+            println!("\n💬 Chat Mode\n");
+            
+            // ✅ تحقق من وجود الأوزان أولاً
+            let zmr_path = std::path::Path::new("models/zumar-v1/zumar-b1.58.zmr");
+            let safetensors_path = std::path::Path::new("models/zumar-v1/model.safetensors");
+            
+            // ✅ إذا لم توجد أي أوزان، شغّل التقطير المدمج
+            if !zmr_path.exists() && !safetensors_path.exists() {
+                println!("\x1b[1;33m⚠️  No Zumar weights found.\x1b[0m");
+                println!("\x1b[1;36m🔍 Searching for teacher model...\x1b[0m");
                 
-                // ... أكمل باقي الكود
-                  let emb = match model.embed(current, &device) {
-                      Ok(e) => {
-                          // تحويل من FP16 إلى FP32 إذا لزم الأمر
-                          let e = e.to_dtype(candle_core::DType::F32).unwrap_or(e);
-                          e
-                      },
-                      Err(_) => break
-                  };
-                  let out = match model.forward(&emb) { Ok(o) => o, Err(_) => break };
-                  let flat = match out.flatten_all() { Ok(f) => f, Err(_) => break };
-                  let v = match flat.to_vec1::<f32>() { Ok(vec) => vec, Err(_) => break };
-                  
-                  let mut logits = v.clone();
-                  for &prev in &generated { let idx = prev as usize; if idx < logits.len() { logits[idx] /= penalty; } }
-                  
-                  let scaled: Vec<f32> = logits.iter().map(|&x| x / temperature as f32).collect();
-                  let max_val = scaled.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
-                  let exp: Vec<f32> = scaled.iter().map(|&v| (v - max_val).exp()).collect();
-                  let sum: f32 = exp.iter().sum();
-                  let probs: Vec<f32> = exp.iter().map(|&v| v / (sum + 1e-9)).collect();
-                  
-                  let mut best_val = f32::NEG_INFINITY;
-                  let mut best_idx = 0u32;
-                  for (i, &val) in probs.iter().enumerate().take(512) { if val > best_val { best_val = val; best_idx = i as u32; } }
-                  
-                  current = best_idx;
-                  generated.push(best_idx);
-                  if best_idx > 3 && best_idx < 260 { print!("{}", (best_idx - 3) as u8 as char); }
-                  io::stdout().flush().ok();
-                  if best_idx == 1 { break; }
-              }
-              
-              let elapsed = start.elapsed();
-              let n = generated.len();
-              let tps = if elapsed.as_secs_f64() > 0.0 { n as f64 / elapsed.as_secs_f64() } else { 0.0 };
-              println!();
-              println!("\x1b[90m📊 {} tokens in {:.1}s ({:.1} tok/s)\x1b[0m", n, elapsed.as_secs_f64(), tps);
-          }
-          println!("\n\x1b[1;35m🛡️  ZUMAR SHUTTING DOWN\x1b[0m");
+                distill_runner(
+                  &args, &device, 
+                  vocab_size, hidden_size, 
+                  num_layers, num_experts, 
+                  top_k, n_heads
+                )?;
+            }
+            
+            
+            // ✅ تحميل الأوزان (الموجودة أو المقطرة حديثاً)
+            let mut loader = loader::ZumarLoader::new("models/zumar-v1");
+            let _ = loader.load_weights(&device)?;
+            
+            let (v, h, l, e) = if let Some(cfg) = loader.get_zmr_config() {
+                (cfg.vocab_size, cfg.hidden_size, cfg.num_layers, cfg.num_experts)
+            } else {
+                (vocab_size, hidden_size, num_layers, num_experts)
+            };
+            
+            println!("🔧 Building model ({}d, {}L, {} experts)...", h, l, e);
+            
+            let mut model = if let Some(ref packed) = loader.packed_blocks {
+                println!("   ⚡ Direct 2-bit mode ({} blocks)", packed.len());
+                ZumarModel::from_packed_blocks(
+                    v, h, l, e, n_heads, 
+                    packed,
+                    loader.packed_embedding.as_ref(),
+                    &device,
+                )?
+            } else {
+                let safetensors_path = std::path::Path::new("models/zumar-v1/model.safetensors");
+                if safetensors_path.exists() {
+                    println!("   📦 Using .safetensors (FP32)");
+                    let vb = unsafe { 
+                        candle_nn::VarBuilder::from_mmaped_safetensors(
+                            &[safetensors_path], candle_core::DType::F32, &device
+                        )? 
+                    };
+                    ZumarModel::new(v, h, l, e, top_k, n_heads, vb)?
+                } else {
+                    println!("\x1b[1;31m❌ No model found\x1b[0m");
+                    return Ok(());
+                }
+            };
+            
+            println!("✅ Ready.\n");
+            
+            let temperature: f64 = 0.8;
+            let max_tokens: usize = 120;
+            let penalty: f32 = 1.2;
+            
+            loop {
+                print!("\x1b[1;32mYou>\x1b[0m ");
+                io::stdout().flush().ok();
+                let mut input = String::new();
+                if io::stdin().read_line(&mut input).is_err() { break; }
+                let prompt = input.trim();
+                if prompt == "exit" || prompt == "quit" { break; }
+                if prompt.is_empty() { continue; }
+                
+                let tokens: Vec<u32> = prompt.chars().map(|c| (c as u32 % 256) + 3).collect();
+                let mut current = *tokens.last().unwrap_or(&1);
+                let start = std::time::Instant::now();
+                let mut generated = Vec::new();
+                
+                print!("\x1b[1;36mZumar>\x1b[0m ");
+                io::stdout().flush().ok();
+                
+                for _ in 0..max_tokens {
+                
+                    let emb = match model.embed(current, &device) {
+                        Ok(e) => {
+                            // تحويل من FP16 إلى FP32 إذا لزم الأمر
+                            let e = e.to_dtype(candle_core::DType::F32).unwrap_or(e);
+                            e
+                        },
+                        Err(_) => break
+                    };
+                    let out = match model.forward(&emb) { Ok(o) => o, Err(_) => break };
+                    let flat = match out.flatten_all() { Ok(f) => f, Err(_) => break };
+                    let v = match flat.to_vec1::<f32>() { Ok(vec) => vec, Err(_) => break };
+                    
+                    let mut logits = v.clone();
+                    for &prev in &generated { let idx = prev as usize; if idx < logits.len() { logits[idx] /= penalty; } }
+                    
+                    let scaled: Vec<f32> = logits.iter().map(|&x| x / temperature as f32).collect();
+                    let max_val = scaled.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+                    let exp: Vec<f32> = scaled.iter().map(|&v| (v - max_val).exp()).collect();
+                    let sum: f32 = exp.iter().sum();
+                    let probs: Vec<f32> = exp.iter().map(|&v| v / (sum + 1e-9)).collect();
+                    
+                    let mut best_val = f32::NEG_INFINITY;
+                    let mut best_idx = 0u32;
+                    for (i, &val) in probs.iter().enumerate().take(512) { if val > best_val { best_val = val; best_idx = i as u32; } }
+                    
+                    current = best_idx;
+                    generated.push(best_idx);
+                    if best_idx > 3 && best_idx < 260 { print!("{}", (best_idx - 3) as u8 as char); }
+                    io::stdout().flush().ok();
+                    if best_idx == 1 { break; }
+                }
+                
+                let elapsed = start.elapsed();
+                let n = generated.len();
+                let tps = if elapsed.as_secs_f64() > 0.0 { n as f64 / elapsed.as_secs_f64() } else { 0.0 };
+                println!();
+                println!("\x1b[90m📊 {} tokens in {:.1}s ({:.1} tok/s)\x1b[0m", n, elapsed.as_secs_f64(), tps);
+            }
+            println!("\n\x1b[1;35m🛡️  ZUMAR SHUTTING DOWN\x1b[0m");
       }
     }
     Ok(())
 }
+
 fn export_formats(
     varmap: &candle_nn::VarMap,  // ← استخدم VarMap مباشرة
     device: &candle_core::Device,
@@ -537,4 +356,136 @@ fn export_formats(
     println!("🚀 llama: ./llama-cli -m {} -p \"Hello\"", gguf_path.display());
     
     Ok(())
+}
+
+
+fn distill_runner(
+    args: &Vec<String>,
+    // varmap: &candle_nn::VarMap,  // ← استخدم VarMap مباشرة
+    device: &candle_core::Device,
+    vocab_size: usize, hidden_size: usize, num_layers: usize,
+    num_experts: usize, top_k: usize, n_heads: usize,
+  ) -> Result<()> {
+    let teacher_dir = std::path::Path::new("models/teacher");
+    if !teacher_dir.exists() {
+        println!("\x1b[1;31m❌ models/teacher/ not found\x1b[0m");
+        return Ok(());
+    }
+
+    let mut teacher_files: Vec<std::path::PathBuf> = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(teacher_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().map_or(false, |e| e == "safetensors") {
+                teacher_files.push(path);
+            }
+        }
+    }
+
+    if teacher_files.is_empty() {
+        println!("\x1b[1;31m❌ No safetensors found in models/teacher/\x1b[0m");
+        return Ok(());
+    }
+
+    // ✅ ترتيب من الأصغر للأكبر (curriculum: الأبسط أولاً)
+    teacher_files.sort_by(|a, b| {
+        let sa = std::fs::metadata(a).map(|m| m.len()).unwrap_or(0);
+        let sb = std::fs::metadata(b).map(|m| m.len()).unwrap_or(0);
+        sa.cmp(&sb)  // ✅ تصاعدي (كان تنازلياً)
+    });
+
+    println!("\x1b[1;32m📂 Found {} teacher model(s):\x1b[0m", teacher_files.len());
+    for f in &teacher_files {
+        let size = std::fs::metadata(f)
+            .map(|m| m.len() as f64 / 1_048_576.0)
+            .unwrap_or(0.0);
+        println!("   📄 {} ({:.1} MB)", f.file_name().unwrap().to_string_lossy(), size);
+    }
+
+    let total_epochs: usize = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(50);
+
+    // ✅ إصلاح 1: بناء النموذج والـ VarMap مرة واحدة خارج الحلقة
+    let mut varmap = VarMap::new();
+
+    // ✅ تحميل أوزان سابقة إن وجدت (للاستئناف)
+    let save_path = std::path::Path::new("models/zumar-v1/model.safetensors");
+    if save_path.exists() {
+        println!("\x1b[1;36m♻️  Resuming from existing checkpoint...\x1b[0m");
+        varmap.load(save_path)?;
+    }
+
+    let vs = candle_nn::VarBuilder::from_varmap(&varmap, candle_core::DType::F32, &device);
+
+    // ✅ بناء مرة واحدة — لن يُعاد تهيئة الأوزان في كل iteration
+    let mut model = ZumarModel::new(
+        vocab_size, hidden_size, num_layers,
+        num_experts, top_k, n_heads, vs,
+    )?;
+
+    let training_data = data::TrainingData::load(args.get(3).map(|s| s.as_str()));
+    let all_texts     = training_data.repeat(10);
+
+    // ── حلقة المعلمين ───────────────────────────────────────────
+    for (i, teacher_path) in teacher_files.iter().enumerate() {
+        println!("\n{}", "=".repeat(60));
+        println!("🧬 Teacher {}/{}: {}",
+            i + 1, teacher_files.len(),
+            teacher_path.file_name().unwrap().to_string_lossy());
+        println!("{}", "=".repeat(60));
+
+        // ✅ إصلاح 2: تحميل المعلم مرة واحدة فقط هنا
+        let teacher = match true_distill::AutoTeacher::load(
+            teacher_path.to_str().unwrap(), &device
+        ) {
+            Ok(t) => {
+                let tc = t.get_config();
+                // تخطي المعلم غير المتوافق
+                if tc.arch_type == "skip" || tc.num_layers == 0 {
+                    println!("\x1b[1;33m   ⚠️  Skipping incompatible teacher\x1b[0m");
+                    continue;
+                }
+                println!("   📊 Teacher: {}d, {}L, {} vocab, {}",
+                    tc.hidden_dim, tc.num_layers, tc.vocab_size, tc.arch_type);
+                t
+            }
+            Err(e) => {
+                println!("\x1b[1;31m❌ Cannot load: {}\x1b[0m", e);
+                continue;
+            }
+        };
+
+        println!("   📊 Zumar:   {}d, {}L, {} vocab",
+            hidden_size, num_layers, vocab_size);
+
+        // ✅ إصلاح 3: distiller يستقبل المعلم مباشرة — لا تحميل ثانٍ
+        let config = true_distill::DistillConfig {
+            epochs:        total_epochs,
+            learning_rate: 0.001,
+            temperature:   3.0,
+        };
+        let distiller = true_distill::TrueDistiller::new(config, device.clone());
+
+        match distiller.distill(&mut model, &varmap, &teacher, &all_texts) {
+            Ok(_) => {
+                // حفظ بعد كل معلم
+                std::fs::create_dir_all(save_path.parent().unwrap()).ok();
+                varmap.save(save_path)?;
+                println!("✅ Teacher {}/{} complete — checkpoint saved", i + 1, teacher_files.len());
+            }
+            Err(e) => println!("\x1b[1;31m❌ Failed: {}\x1b[0m", e),
+        }
+
+        // ✅ تحرير الذاكرة قبل تحميل المعلم التالي
+        drop(teacher);
+    }
+
+    // تصدير تلقائي بعد كل المعلمين
+    println!("\n\x1b[1;33m📦 Auto-exporting to .zmr + .gguf...\x1b[0m");
+    export_formats(
+        &varmap, &device,
+        vocab_size, hidden_size, num_layers,
+        num_experts, top_k, n_heads,
+    )?;
+    println!("\n\x1b[1;32m🎉 ALL {} TEACHERS DISTILLED!\x1b[0m", teacher_files.len());
+    return Ok(());
 }
