@@ -1,99 +1,129 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, BTreeMap};
+
+const EMB_DIM: usize = 256;
 
 /// نظام استرجاع بسيط (بدون قاعدة بيانات خارجية)
 pub struct SimpleRAG {
-    /// المستندات المخزنة
-    documents: Vec<String>,
-    /// تضمينات المستندات (محسوبة مسبقاً)
+    documents:  Vec<String>,
     embeddings: Vec<Vec<f32>>,
+    /// ✅ مفردات مرتبة ثابتة — تضمن نفس المتجه لنفس النص دائماً
+    vocab:      Vec<String>,
 }
 
 impl SimpleRAG {
     pub fn new() -> Self {
         Self {
-            documents: Vec::new(),
+            documents:  Vec::new(),
             embeddings: Vec::new(),
+            vocab:      Vec::new(),
         }
     }
-    
-    /// إضافة مستندات للنظام
+
     pub fn add_documents(&mut self, docs: Vec<String>) {
+        // ── بناء المفردات الموحدة أولاً ─────────────────────────
+        // نجمع كل الكلمات من جميع المستندات الجديدة
+        for doc in &docs {
+            for word in doc.split_whitespace() {
+                let w = word.to_lowercase();
+                if !self.vocab.contains(&w) {
+                    self.vocab.push(w);
+                }
+            }
+        }
+        // ✅ ترتيب أبجدي ثابت — HashMap العشوائي هو المشكلة القديمة
+        self.vocab.sort();
+        self.vocab.dedup();
+        self.vocab.truncate(EMB_DIM);
+
+        // ── إعادة حساب embeddings جميع المستندات السابقة ─────────
+        // ضروري لأن المفردات تغيّرت
+        self.embeddings = self.documents.iter()
+            .map(|d| self.embed_with_vocab(d))
+            .collect();
+
+        // ── إضافة المستندات الجديدة ──────────────────────────────
         for doc in docs {
-            // تضمين بسيط: تردد الكلمات
-            let emb = self.simple_embed(&doc);
+            let emb = self.embed_with_vocab(&doc);
             self.embeddings.push(emb);
             self.documents.push(doc);
         }
     }
-    
-    /// تضمين بسيط (TF-IDF مصغر)
-    fn simple_embed(&self, text: &str) -> Vec<f32> {
-        let mut freq: HashMap<String, f32> = HashMap::new();
+
+    /// ✅ تضمين حتمي: يستخدم self.vocab المرتبة أبجدياً
+    /// نفس النص → نفس المتجه دائماً بغض النظر عن ترتيب الإدراج
+    fn embed_with_vocab(&self, text: &str) -> Vec<f32> {
+        // حساب تردد الكلمات
+        let mut freq: BTreeMap<&str, f32> = BTreeMap::new();
         let words: Vec<&str> = text.split_whitespace().collect();
-        
-        for word in &words {
-            *freq.entry(word.to_lowercase()).or_insert(0.0) += 1.0;
-        }
-        
-        // تطبيع
         let total = words.len() as f32;
-        freq.values_mut().for_each(|v| *v /= total.max(1.0));
-        
-        // تحويل إلى متجه (بسيط: أول 256 كلمة فريدة)
-        let mut vec = vec![0.0f32; 256];
-        for (i, (_, v)) in freq.iter().enumerate().take(256) {
-            vec[i] = *v;
+
+        for word in &words {
+            *freq.entry(word).or_insert(0.0) += 1.0 / total.max(1.0);
         }
-        
+
+        // ✅ ملء المتجه بترتيب self.vocab الثابت
+        let mut vec = vec![0.0f32; EMB_DIM];
+        for (i, vocab_word) in self.vocab.iter().enumerate() {
+            if let Some(&v) = freq.get(vocab_word.as_str()) {
+                vec[i] = v;
+            }
+        }
+
+        // تطبيع L2
+        let norm: f32 = vec.iter().map(|x| x * x).sum::<f32>().sqrt();
+        if norm > 1e-6 {
+            vec.iter_mut().for_each(|x| *x /= norm);
+        }
+
         vec
     }
-    
+
     /// البحث عن المستندات الأكثر صلة
     pub fn search(&self, query: &str, top_k: usize) -> Vec<String> {
-        let query_emb = self.simple_embed(query);
-        
-        // حساب التشابه (cosine similarity بسيط)
+        if self.documents.is_empty() {
+            return Vec::new();
+        }
+
+        let query_emb = self.embed_with_vocab(query);
+
         let mut scores: Vec<(f32, usize)> = self.embeddings
             .iter()
             .enumerate()
-            .map(|(i, emb)| {
-                let score = self.cosine_sim(&query_emb, emb);
-                (score, i)
-            })
+            .map(|(i, emb)| (self.cosine_sim(&query_emb, emb), i))
             .collect();
-        
-        // ترتيب تنازلي
-        scores.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
-        
-        // إرجاع أفضل k
+
+        scores.sort_by(|a, b| b.0.partial_cmp(&a.0)
+            .unwrap_or(std::cmp::Ordering::Equal));
+
         scores.iter()
             .take(top_k)
+            .filter(|(score, _)| *score > 1e-6)  // تخطي نتائج عديمة الصلة
             .map(|(_, idx)| self.documents[*idx].clone())
             .collect()
     }
-    
-    /// تشابه جيب التمام
+
     fn cosine_sim(&self, a: &[f32], b: &[f32]) -> f32 {
-        let dot: f32 = a.iter().zip(b).map(|(x, y)| x * y).sum();
-        let norm_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
-        let norm_b: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
-        
-        if norm_a < 1e-6 || norm_b < 1e-6 {
-            return 0.0;
-        }
-        
-        dot / (norm_a * norm_b)
+        // المتجهات مطبّعة مسبقاً — الجداء النقطي = cosine similarity
+        a.iter().zip(b).map(|(x, y)| x * y).sum()
     }
-    
-    /// تحسين النص المدخل بمعلومات مسترجعة
+
     pub fn augment_prompt(&mut self, prompt: &str) -> String {
         let docs = self.search(prompt, 3);
-        
         if docs.is_empty() {
             return prompt.to_string();
         }
-        
-        let context = docs.join("\n");
-        format!("Context:\n{}\n\nQuestion: {}", context, prompt)
+        format!("Context:\n{}\n\nQuestion: {}", docs.join("\n---\n"), prompt)
     }
+
+    pub fn doc_count(&self) -> usize {
+        self.documents.len()
+    }
+
+    pub fn vocab_size(&self) -> usize {
+        self.vocab.len()
+    }
+}
+
+impl Default for SimpleRAG {
+    fn default() -> Self { Self::new() }
 }
