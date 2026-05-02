@@ -124,7 +124,12 @@ impl ZumarFlashAttention {
                 running_sum = (running_sum.broadcast_mul(&correction))?;
 
                 // 4. exp(scores - new_max): [b, n_heads, t_len, k_len]
-                let scores_shifted = (scores - new_max.broadcast_as(scores.shape())?)?;
+                // let scores_shifted = (scores - new_max.broadcast_as(scores.shape())?)?;
+                // احفظ shape قبل استخدام scores:
+                let scores_shape   = scores.shape().clone();
+                let new_max_broad  = new_max.broadcast_as(&scores_shape)?;
+                let scores_shifted = (scores - new_max_broad)?;  // ← scores تُستهلَك هنا مرة واحدة فقط
+                
                 let exp_scores     = scores_shifted.exp()?;
 
                 // 5. تحديث المجموع

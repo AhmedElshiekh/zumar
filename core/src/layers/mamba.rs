@@ -1,6 +1,10 @@
 use candle_core::{Tensor, Result, DType};
 use candle_nn::{Module, VarBuilder, Linear, Conv1d, Conv1dConfig};
 
+fn softplus(x: &Tensor) -> Result<Tensor> {
+    (x.exp()? + 1.0f64)?.log()
+}
+
 pub struct ZumarMambaConfig {
     pub d_model: usize,
     pub d_state: usize,
@@ -37,6 +41,7 @@ impl ZumarMambaBlock {
             groups:  d_inner,
             stride:  1,
             dilation: 1,
+            cudnn_fwd_algo: None
         };
         let conv1d = candle_nn::conv1d(
             d_inner, d_inner, cfg.d_conv,
@@ -133,19 +138,22 @@ impl ZumarMambaBlock {
             let u_t = x_dbl_t.narrow(1, self.d_state*2, self.d_inner)?; // [b, d_inner]
 
             // Discretization: delta_t → softplus لضمان القيم الموجبة
-            let delta_t = candle_nn::ops::softplus(&delta_t)?;           // [b, d_inner]
+            // let delta_t = candle_nn::ops::softplus(&delta_t)?;           // [b, d_inner]
+            let delta_t = softplus(&delta_t)?;
 
             // A_bar = exp(delta_t * a)
             // a:       [d_state, d_inner]
             // delta_t: [b, d_inner] → expand إلى [b, d_state, d_inner]
             let delta_exp = delta_t.unsqueeze(1)?.expand((batch, self.d_state, self.d_inner))?;
             let a_exp     = a.unsqueeze(0)?.expand((batch, self.d_state, self.d_inner))?;
-            let a_bar     = (a_exp * &delta_exp)?.neg()?.exp()?;   // [b, d_state, d_inner]
-
+            // let a_bar     = (a_exp * &delta_exp)?.neg()?.exp()?;   // [b, d_state, d_inner]
+            let a_bar = a_exp.mul(&delta_exp)?.neg()?.exp()?;
+            
             // B_bar = delta_t * b_t
             // b_t: [b, d_state] → [b, d_state, 1]
             let b_bar = b_t.unsqueeze(2)?.expand((batch, self.d_state, self.d_inner))?;
-            let b_bar = (&b_bar * &delta_exp)?;                    // [b, d_state, d_inner]
+            // let b_bar = (&b_bar * &delta_exp)?;                    // [b, d_state, d_inner]
+            let b_bar = b_bar.mul(&delta_exp)?;
 
             // u_t: [b, d_inner] → [b, 1, d_inner]
             let u_expanded = u_t.unsqueeze(1)?.expand((batch, self.d_state, self.d_inner))?;
@@ -161,7 +169,8 @@ impl ZumarMambaBlock {
             let ch = ch.squeeze(1)?;                               // [b, d_inner]
 
             let d_expanded = d.unsqueeze(0)?.expand((batch, self.d_inner))?;
-            let du         = (&u_t * &d_expanded)?;                // [b, d_inner]
+            // let du         = (&u_t * &d_expanded)?;                // [b, d_inner]
+            let du         = u_t.mul(&d_expanded)?;
             let y_t        = (ch + du)?;                           // [b, d_inner]
 
             outputs.push(y_t.unsqueeze(1)?);                       // [b, 1, d_inner]
