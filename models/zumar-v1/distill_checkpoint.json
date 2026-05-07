@@ -1,0 +1,9 @@
+{
+  "teacher_index": 0,
+  "teacher_name": "",
+  "epoch": 10,
+  "total_epochs": 0,
+  "best_loss": 0.0,
+  "current_lr": 0.001,
+  "done_teachers": []
+}

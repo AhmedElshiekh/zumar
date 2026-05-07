@@ -1,0 +1,393 @@
+[1m[92m   Compiling[0m core v2.2.0 (/root/projects/zumar/core)
+[1m[33mwarning[0m[1m: unused import: `bf16`[0m
+  [1m[94m--> [0mcore/src/true_distill.rs:11:17
+   [1m[94m|[0m
+[1m[94m11[0m [1m[94m|[0m use half::{f16, bf16};
+   [1m[94m|[0m                 [1m[33m^^^^[0m
+   [1m[94m|[0m
+   [1m[94m= [0m[1mnote[0m: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+[1m[33mwarning[0m[1m: unused import: `Optimizer`[0m
+ [1m[94m--> [0mcore/src/layers/ewc.rs:2:25
+  [1m[94m|[0m
+[1m[94m2[0m [1m[94m|[0m use candle_nn::{VarMap, Optimizer};
+  [1m[94m|[0m                         [1m[33m^^^^^^^^^[0m
+
+[1m[33mwarning[0m[1m: unused import: `Read`[0m
+  [1m[94m--> [0mcore/src/tokenizer.rs:64:43
+   [1m[94m|[0m
+[1m[94m64[0m [1m[94m|[0m         use std::io::{BufReader, BufRead, Read};
+   [1m[94m|[0m                                           [1m[33m^^^^[0m
+
+[1m[33mwarning[0m[1m: unused variable: `h`[0m
+   [1m[94m--> [0mcore/src/true_distill.rs:528:20
+    [1m[94m|[0m
+[1m[94m528[0m [1m[94m|[0m     fn detect_arch(h: &serde_json::Value) -> Teach[1m[94m...[0m
+    [1m[94m|[0m                    [1m[33m^[0m [1m[33mhelp: if this is intentional, prefix it with an underscore: `_h`[0m
+    [1m[94m|[0m
+    [1m[94m= [0m[1mnote[0m: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+[1m[33mwarning[0m[1m: fields `hidden_size` and `vocab_size` are never read[0m
+  [1m[94m--> [0mcore/src/layers/mod.rs:32:9
+   [1m[94m|[0m
+[1m[94m27[0m [1m[94m|[0m pub struct ZumarModel {
+   [1m[94m|[0m            [1m[94m----------[0m [1m[94mfields in this struct[0m
+[1m[94m...[0m
+[1m[94m32[0m [1m[94m|[0m     pub hidden_size: usize,
+   [1m[94m|[0m         [1m[33m^^^^^^^^^^^[0m
+[1m[94m33[0m [1m[94m|[0m     pub vocab_size:  usize,
+   [1m[94m|[0m         [1m[33m^^^^^^^^^^[0m
+   [1m[94m|[0m
+   [1m[94m= [0m[1mnote[0m: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+[1m[33mwarning[0m[1m: associated items `from_zmr` and `to_packed_bytes` are never used[0m
+  [1m[94m--> [0mcore/src/layers/bitlinear.rs:40:12
+   [1m[94m|[0m
+[1m[94m17[0m [1m[94m|[0m impl ZumarBitLinear {
+   [1m[94m|[0m [1m[94m-------------------[0m [1m[94massociated items in this implementation[0m
+[1m[94m...[0m
+[1m[94m40[0m [1m[94m|[0m     pub fn from_zmr(data: &[u8], shape: (usize, usi[1m[94m...[0m
+   [1m[94m|[0m            [1m[33m^^^^^^^^[0m
+[1m[94m...[0m
+[1m[94m75[0m [1m[94m|[0m     pub fn to_packed_bytes(&self) -> Result<Vec<u8>> {
+   [1m[94m|[0m            [1m[33m^^^^^^^^^^^^^^^[0m
+
+[1m[33mwarning[0m[1m: method `forward_selective` is never used[0m
+   [1m[94m--> [0mcore/src/layers/moe.rs:131:12
+    [1m[94m|[0m
+[1m[94m 18[0m [1m[94m|[0m impl ZumarMoE {
+    [1m[94m|[0m [1m[94m-------------[0m [1m[94mmethod in this implementation[0m
+[1m[94m...[0m
+[1m[94m131[0m [1m[94m|[0m     pub fn forward_selective(
+    [1m[94m|[0m            [1m[33m^^^^^^^^^^^^^^^^^[0m
+
+[1m[33mwarning[0m[1m: function `softplus` is never used[0m
+ [1m[94m--> [0mcore/src/layers/mamba.rs:4:4
+  [1m[94m|[0m
+[1m[94m4[0m [1m[94m|[0m fn softplus(x: &Tensor) -> Result<Tensor> {
+  [1m[94m|[0m    [1m[33m^^^^^^^^[0m
+
+[1m[33mwarning[0m[1m: struct `ZumarMambaConfig` is never constructed[0m
+ [1m[94m--> [0mcore/src/layers/mamba.rs:8:12
+  [1m[94m|[0m
+[1m[94m8[0m [1m[94m|[0m pub struct ZumarMambaConfig {
+  [1m[94m|[0m            [1m[33m^^^^^^^^^^^^^^^^[0m
+
+[1m[33mwarning[0m[1m: struct `ZumarMambaBlock` is never constructed[0m
+  [1m[94m--> [0mcore/src/layers/mamba.rs:15:12
+   [1m[94m|[0m
+[1m[94m15[0m [1m[94m|[0m pub struct ZumarMambaBlock {
+   [1m[94m|[0m            [1m[33m^^^^^^^^^^^^^^^[0m
+
+[1m[33mwarning[0m[1m: associated items `new`, `apply_conv1d`, and `selective_scan` are never used[0m
+   [1m[94m--> [0mcore/src/layers/mamba.rs:29:12
+    [1m[94m|[0m
+[1m[94m 28[0m [1m[94m|[0m impl ZumarMambaBlock {
+    [1m[94m|[0m [1m[94m--------------------[0m [1m[94massociated items in this implementation[0m
+[1m[94m 29[0m [1m[94m|[0m     pub fn new(cfg: &ZumarMambaConfig, vs: VarBuil[1m[94m...[0m
+    [1m[94m|[0m            [1m[33m^^^[0m
+[1m[94m...[0m
+[1m[94m 73[0m [1m[94m|[0m     fn apply_conv1d(&self, x: &Tensor) -> Result<T[1m[94m...[0m
+    [1m[94m|[0m        [1m[33m^^^^^^^^^^^^[0m
+[1m[94m...[0m
+[1m[94m107[0m [1m[94m|[0m     fn selective_scan(
+    [1m[94m|[0m        [1m[33m^^^^^^^^^^^^^^[0m
+
+[1m[33mwarning[0m[1m: struct `ZumarSpikingLayer` is never constructed[0m
+ [1m[94m--> [0mcore/src/layers/snn.rs:3:12
+  [1m[94m|[0m
+[1m[94m3[0m [1m[94m|[0m pub struct ZumarSpikingLayer {
+  [1m[94m|[0m            [1m[33m^^^^^^^^^^^^^^^^^[0m
+
+[1m[33mwarning[0m[1m: associated items `new`, `reset`, `surrogate_gradient`, and `forward` are never used[0m
+  [1m[94m--> [0mcore/src/layers/snn.rs:11:12
+   [1m[94m|[0m
+[1m[94m10[0m [1m[94m|[0m impl ZumarSpikingLayer {
+   [1m[94m|[0m [1m[94m----------------------[0m [1m[94massociated items in this implementation[0m
+[1m[94m11[0m [1m[94m|[0m     pub fn new(threshold: f32, tau: f32, time_steps[1m[94m...[0m
+   [1m[94m|[0m            [1m[33m^^^[0m
+[1m[94m...[0m
+[1m[94m20[0m [1m[94m|[0m     pub fn reset(&mut self) {
+   [1m[94m|[0m            [1m[33m^^^^^[0m
+[1m[94m...[0m
+[1m[94m24[0m [1m[94m|[0m     fn surrogate_gradient(v: &Tensor, threshold: f3[1m[94m...[0m
+   [1m[94m|[0m        [1m[33m^^^^^^^^^^^^^^^^^^[0m
+[1m[94m...[0m
+[1m[94m33[0m [1m[94m|[0m     pub fn forward(&mut self, x: &Tensor) -> Result[1m[94m...[0m
+   [1m[94m|[0m            [1m[33m^^^^^^^[0m
+
+[1m[33mwarning[0m[1m: associated functions `new` and `extract_teacher_vocab_from_safetensors` are never used[0m
+   [1m[94m--> [0mcore/src/layers/vocab_aligner.rs:136:12
+    [1m[94m|[0m
+[1m[94m135[0m [1m[94m|[0m impl VocabAligner {
+    [1m[94m|[0m [1m[94m-----------------[0m [1m[94massociated functions in this implementation[0m
+[1m[94m136[0m [1m[94m|[0m     pub fn new(student_vocab: HashMap<String, u32>, [1m[94m...[0m
+    [1m[94m|[0m            [1m[33m^^^[0m
+[1m[94m...[0m
+[1m[94m241[0m [1m[94m|[0m     pub fn extract_teacher_vocab_from_safetensors(pa[1m[94m...[0m
+    [1m[94m|[0m            [1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[33mwarning[0m[1m: struct `MultiTeacherAlignment` is never constructed[0m
+   [1m[94m--> [0mcore/src/layers/vocab_aligner.rs:303:12
+    [1m[94m|[0m
+[1m[94m303[0m [1m[94m|[0m pub struct MultiTeacherAlignment {
+    [1m[94m|[0m            [1m[33m^^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[33mwarning[0m[1m: associated items `new`, `add`, `normalized_weight`, `ensemble_kl`, and `report` are never used[0m
+   [1m[94m--> [0mcore/src/layers/vocab_aligner.rs:309:12
+    [1m[94m|[0m
+[1m[94m308[0m [1m[94m|[0m impl MultiTeacherAlignment {
+    [1m[94m|[0m [1m[94m--------------------------[0m [1m[94massociated items in this implementation[0m
+[1m[94m309[0m [1m[94m|[0m     pub fn new() -> Self {
+    [1m[94m|[0m            [1m[33m^^^[0m
+[1m[94m...[0m
+[1m[94m313[0m [1m[94m|[0m     pub fn add(&mut self, name: String, alignment:[1m[94m...[0m
+    [1m[94m|[0m            [1m[33m^^^[0m
+[1m[94m...[0m
+[1m[94m319[0m [1m[94m|[0m     pub fn normalized_weight(&self, idx: usize) ->[1m[94m...[0m
+    [1m[94m|[0m            [1m[33m^^^^^^^^^^^^^^^^^[0m
+[1m[94m...[0m
+[1m[94m325[0m [1m[94m|[0m     pub fn ensemble_kl(
+    [1m[94m|[0m            [1m[33m^^^^^^^^^^^[0m
+[1m[94m...[0m
+[1m[94m359[0m [1m[94m|[0m     pub fn report(&self) {
+    [1m[94m|[0m            [1m[33m^^^^^^[0m
+
+[1m[33mwarning[0m[1m: fields `fisher` and `optimal_weights` are never read[0m
+  [1m[94m--> [0mcore/src/layers/ewc.rs:14:9
+   [1m[94m|[0m
+[1m[94m12[0m [1m[94m|[0m pub struct FisherCheckpoint {
+   [1m[94m|[0m            [1m[94m----------------[0m [1m[94mfields in this struct[0m
+[1m[94m13[0m [1m[94m|[0m     /// Fisher information لكل وزن: اسم_المتغير [1m[94m...[0m
+[1m[94m14[0m [1m[94m|[0m     pub fisher:      HashMap<String, Vec<f32>>,
+   [1m[94m|[0m         [1m[33m^^^^^^[0m
+[1m[94m15[0m [1m[94m|[0m     /// قيم الأوزان المثلى عند هذه النقطة θ*
+[1m[94m16[0m [1m[94m|[0m     pub optimal_weights: HashMap<String, Vec<f32>>,
+   [1m[94m|[0m         [1m[33m^^^^^^^^^^^^^^^[0m
+   [1m[94m|[0m
+   [1m[94m= [0m[1mnote[0m: `FisherCheckpoint` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+[1m[33mwarning[0m[1m: struct `ZumarConfig` is never constructed[0m
+  [1m[94m--> [0mcore/src/config.rs:13:12
+   [1m[94m|[0m
+[1m[94m13[0m [1m[94m|[0m pub struct ZumarConfig {
+   [1m[94m|[0m            [1m[33m^^^^^^^^^^^[0m
+
+[1m[33mwarning[0m[1m: associated items `d_inner`, `head_dim`, `approx_params_m`, `save`, `load`, and `load_or_default` are never used[0m
+  [1m[94m--> [0mcore/src/config.rs:54:12
+   [1m[94m|[0m
+[1m[94m52[0m [1m[94m|[0m impl ZumarConfig {
+   [1m[94m|[0m [1m[94m----------------[0m [1m[94massociated items in this implementation[0m
+[1m[94m53[0m [1m[94m|[0m     /// حجم d_inner في Mamba
+[1m[94m54[0m [1m[94m|[0m     pub fn d_inner(&self) -> usize {
+   [1m[94m|[0m            [1m[33m^^^^^^^[0m
+[1m[94m...[0m
+[1m[94m59[0m [1m[94m|[0m     pub fn head_dim(&self) -> usize {
+   [1m[94m|[0m            [1m[33m^^^^^^^^[0m
+[1m[94m...[0m
+[1m[94m64[0m [1m[94m|[0m     pub fn approx_params_m(&self) -> f64 {
+   [1m[94m|[0m            [1m[33m^^^^^^^^^^^^^^^[0m
+[1m[94m...[0m
+[1m[94m75[0m [1m[94m|[0m     pub fn save(&self, path: &str) -> std::io::Resu[1m[94m...[0m
+   [1m[94m|[0m            [1m[33m^^^^[0m
+[1m[94m...[0m
+[1m[94m82[0m [1m[94m|[0m     pub fn load(path: &str) -> std::io::Result<Self> {
+   [1m[94m|[0m            [1m[33m^^^^[0m
+[1m[94m...[0m
+[1m[94m89[0m [1m[94m|[0m     pub fn load_or_default(path: &str) -> Self {
+   [1m[94m|[0m            [1m[33m^^^^^^^^^^^^^^^[0m
+
+[1m[33mwarning[0m[1m: constant `PAD_TOKEN` is never used[0m
+  [1m[94m--> [0mcore/src/tokenizer.rs:18:7
+   [1m[94m|[0m
+[1m[94m18[0m [1m[94m|[0m const PAD_TOKEN: &str = "<pad>";
+   [1m[94m|[0m       [1m[33m^^^^^^^^^[0m
+
+[1m[33mwarning[0m[1m: constant `UNK_TOKEN` is never used[0m
+  [1m[94m--> [0mcore/src/tokenizer.rs:19:7
+   [1m[94m|[0m
+[1m[94m19[0m [1m[94m|[0m const UNK_TOKEN: &str = "<unk>";
+   [1m[94m|[0m       [1m[33m^^^^^^^^^[0m
+
+[1m[33mwarning[0m[1m: constant `BOS_TOKEN` is never used[0m
+  [1m[94m--> [0mcore/src/tokenizer.rs:20:7
+   [1m[94m|[0m
+[1m[94m20[0m [1m[94m|[0m const BOS_TOKEN: &str = "<s>";
+   [1m[94m|[0m       [1m[33m^^^^^^^^^[0m
+
+[1m[33mwarning[0m[1m: constant `EOS_TOKEN` is never used[0m
+  [1m[94m--> [0mcore/src/tokenizer.rs:21:7
+   [1m[94m|[0m
+[1m[94m21[0m [1m[94m|[0m const EOS_TOKEN: &str = "</s>";
+   [1m[94m|[0m       [1m[33m^^^^^^^^^[0m
+
+[1m[33mwarning[0m[1m: constant `MASK_TOKEN` is never used[0m
+  [1m[94m--> [0mcore/src/tokenizer.rs:22:7
+   [1m[94m|[0m
+[1m[94m22[0m [1m[94m|[0m const MASK_TOKEN: &str = "<mask>";
+   [1m[94m|[0m       [1m[33m^^^^^^^^^^[0m
+
+[1m[33mwarning[0m[1m: associated items `encode_to_vec`, `encode`, `decode`, `get_vocab_map`, and `quick_test` are never used[0m
+   [1m[94m--> [0mcore/src/tokenizer.rs:159:12
+    [1m[94m|[0m
+[1m[94m 28[0m [1m[94m|[0m impl ZumarTokenizer {
+    [1m[94m|[0m [1m[94m-------------------[0m [1m[94massociated items in this implementation[0m
+[1m[94m...[0m
+[1m[94m159[0m [1m[94m|[0m     pub fn encode_to_vec(&self, text: &str) -> Can[1m[94m...[0m
+    [1m[94m|[0m            [1m[33m^^^^^^^^^^^^^[0m
+[1m[94m...[0m
+[1m[94m163[0m [1m[94m|[0m     pub fn encode(&self, text: &str, device: &Devi[1m[94m...[0m
+    [1m[94m|[0m            [1m[33m^^^^^^[0m
+[1m[94m...[0m
+[1m[94m168[0m [1m[94m|[0m     pub fn decode(&self, ids: &[u32]) -> CandleRes[1m[94m...[0m
+    [1m[94m|[0m            [1m[33m^^^^^^[0m
+[1m[94m...[0m
+[1m[94m177[0m [1m[94m|[0m     pub fn get_vocab_map(&self) -> HashMap<String,[1m[94m...[0m
+    [1m[94m|[0m            [1m[33m^^^^^^^^^^^^^[0m
+[1m[94m...[0m
+[1m[94m186[0m [1m[94m|[0m     fn quick_test(tokenizer: &Tokenizer) {
+    [1m[94m|[0m        [1m[33m^^^^^^^^^^[0m
+
+[1m[33mwarning[0m[1m: function `collect_text_files` is never used[0m
+   [1m[94m--> [0mcore/src/tokenizer.rs:202:4
+    [1m[94m|[0m
+[1m[94m202[0m [1m[94m|[0m fn collect_text_files(dir: &str) -> CandleResult<V[1m[94m...[0m
+    [1m[94m|[0m    [1m[33m^^^^^^^^^^^^^^^^^^[0m
+
+[1m[33mwarning[0m[1m: associated items `get_tokenizer_path` and `load_packed_embedding` are never used[0m
+   [1m[94m--> [0mcore/src/loader.rs:33:12
+    [1m[94m|[0m
+[1m[94m 22[0m [1m[94m|[0m impl ZumarLoader {
+    [1m[94m|[0m [1m[94m----------------[0m [1m[94massociated items in this implementation[0m
+[1m[94m...[0m
+[1m[94m 33[0m [1m[94m|[0m     pub fn get_tokenizer_path(&self) -> String {
+    [1m[94m|[0m            [1m[33m^^^^^^^^^^^^^^^^^^[0m
+[1m[94m...[0m
+[1m[94m169[0m [1m[94m|[0m     pub fn load_packed_embedding(
+    [1m[94m|[0m            [1m[33m^^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[33mwarning[0m[1m: struct `KVCache` is never constructed[0m
+ [1m[94m--> [0mcore/src/kv_cache.rs:5:12
+  [1m[94m|[0m
+[1m[94m5[0m [1m[94m|[0m pub struct KVCache {
+  [1m[94m|[0m            [1m[33m^^^^^^^[0m
+
+[1m[33mwarning[0m[1m: multiple associated items are never used[0m
+  [1m[94m--> [0mcore/src/kv_cache.rs:15:12
+   [1m[94m|[0m
+[1m[94m12[0m [1m[94m|[0m impl KVCache {
+   [1m[94m|[0m [1m[94m------------[0m [1m[94massociated items in this implementation[0m
+[1m[94m...[0m
+[1m[94m15[0m [1m[94m|[0m     pub fn new(max_seq_len: usize) -> Self {
+   [1m[94m|[0m            [1m[33m^^^[0m
+[1m[94m...[0m
+[1m[94m24[0m [1m[94m|[0m     pub fn with_default_size() -> Self {
+   [1m[94m|[0m            [1m[33m^^^^^^^^^^^^^^^^^[0m
+[1m[94m...[0m
+[1m[94m30[0m [1m[94m|[0m     pub fn update(&mut self, k_new: Tensor, v_new: [1m[94m...[0m
+   [1m[94m|[0m            [1m[33m^^^^^^[0m
+[1m[94m...[0m
+[1m[94m63[0m [1m[94m|[0m     pub fn len(&self) -> usize {
+   [1m[94m|[0m            [1m[33m^^^[0m
+[1m[94m...[0m
+[1m[94m68[0m [1m[94m|[0m     pub fn is_empty(&self) -> bool {
+   [1m[94m|[0m            [1m[33m^^^^^^^^[0m
+[1m[94m...[0m
+[1m[94m73[0m [1m[94m|[0m     pub fn is_full(&self) -> bool {
+   [1m[94m|[0m            [1m[33m^^^^^^^[0m
+[1m[94m...[0m
+[1m[94m78[0m [1m[94m|[0m     pub fn usage_ratio(&self) -> f32 {
+   [1m[94m|[0m            [1m[33m^^^^^^^^^^^[0m
+[1m[94m...[0m
+[1m[94m82[0m [1m[94m|[0m     pub fn reset(&mut self) {
+   [1m[94m|[0m            [1m[33m^^^^^[0m
+
+[1m[33mwarning[0m[1m: struct `LayerKVCache` is never constructed[0m
+  [1m[94m--> [0mcore/src/kv_cache.rs:90:12
+   [1m[94m|[0m
+[1m[94m90[0m [1m[94m|[0m pub struct LayerKVCache {
+   [1m[94m|[0m            [1m[33m^^^^^^^^^^^^[0m
+
+[1m[33mwarning[0m[1m: associated items `new`, `get_mut`, `reset_all`, `max_used_len`, and `usage_report` are never used[0m
+   [1m[94m--> [0mcore/src/kv_cache.rs:96:12
+    [1m[94m|[0m
+[1m[94m 95[0m [1m[94m|[0m impl LayerKVCache {
+    [1m[94m|[0m [1m[94m-----------------[0m [1m[94massociated items in this implementation[0m
+[1m[94m 96[0m [1m[94m|[0m     pub fn new(num_layers: usize, max_seq_len: usi[1m[94m...[0m
+    [1m[94m|[0m            [1m[33m^^^[0m
+[1m[94m...[0m
+[1m[94m103[0m [1m[94m|[0m     pub fn get_mut(&mut self, layer_idx: usize) ->[1m[94m...[0m
+    [1m[94m|[0m            [1m[33m^^^^^^^[0m
+[1m[94m...[0m
+[1m[94m107[0m [1m[94m|[0m     pub fn reset_all(&mut self) {
+    [1m[94m|[0m            [1m[33m^^^^^^^^^[0m
+[1m[94m...[0m
+[1m[94m114[0m [1m[94m|[0m     pub fn max_used_len(&self) -> usize {
+    [1m[94m|[0m            [1m[33m^^^^^^^^^^^^[0m
+[1m[94m...[0m
+[1m[94m118[0m [1m[94m|[0m     pub fn usage_report(&self) -> String {
+    [1m[94m|[0m            [1m[33m^^^^^^^^^^^^[0m
+
+[1m[33mwarning[0m[1m: method `get_config` is never used[0m
+   [1m[94m--> [0mcore/src/true_distill.rs:333:12
+    [1m[94m|[0m
+[1m[94m301[0m [1m[94m|[0m impl AutoTeacher {
+    [1m[94m|[0m [1m[94m----------------[0m [1m[94mmethod in this implementation[0m
+[1m[94m...[0m
+[1m[94m333[0m [1m[94m|[0m     pub fn get_config(&self) -> &TeacherConfig { &[1m[94m...[0m
+    [1m[94m|[0m            [1m[33m^^^^^^^^^^[0m
+
+[1m[33mwarning[0m: `core` (bin "core") generated 32 warnings (run `cargo fix --bin "core" -p core` to apply 2 suggestions)
+[1m[92m    Finished[0m `release` profile [optimized] target(s) in 48.76s
+[1m[92m     Running[0m `/tmp/cargo_target/release/core distill 10 /data`
+[1;35m
+
+    ███████╗██╗   ██╗███╗   ███╗ █████╗ ██████╗ 
+    ╚══███╔╝██║   ██║████╗ ████║██╔══██╗██╔══██╗
+      ███╔╝ ██║   ██║██╔████╔██║███████║██████╔╝
+     ███╔╝  ██║   ██║██║╚██╔╝██║██╔══██║██╔══██╗
+    ███████╗╚██████╔╝██║ ╚═╝ ██║██║  ██║██║  ██║
+    ╚══════╝ ╚═════╝ ╚═╝     ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝
+    
+[0m
+[1;36m--- 🌌 ZUMAR SOVEREIGN CORE v6.0 ---[0m
+[90m--------------------------------------------------[0m
+🍃 Routing to CPU for efficiency...
+
+Usage:
+  distill <epochs>     - True distillation (resumes from last save)
+  train <epochs>       - Self-training on built-in data
+  chat                 - Chat mode (default)
+  pack                 - Export to .zmr + .gguf
+
+🧠 TRUE KNOWLEDGE DISTILLATION (ALL MODELS - CUMULATIVE)
+
+
+════════════════════════════════════════════════════════════
+🧬 ZUMAR MULTI-TEACHER DISTILLATION
+   Shared Subword Projection + Online EWC
+════════════════════════════════════════════════════════════
+
+📖 Loading Zumar tokenizer...
+📖 Loading tokenizer from models/tokenizer/tokenizer.json
+   ✅ vocab=50257
+
+📂 Found 3 teacher(s):
+   📄 model.safetensors (256.6 MB)
+   📄 model.safetensors (336.5 MB)
+   📄 model.safetensors (1124.0 MB)
+
+♻️  Resuming from checkpoint...
+📚 Using built-in training data
+   📊 Training samples: 50
+
+🔗 Building vocabulary alignments...
+   📚 Student vocab loaded: 32937 tokens
+   📚 'other': 32930 tokens in teacher vocab
+   🔗 other alignment: 24930 shared tokens (50.7% teacher, 49.6% student)
+   📚 'distilgpt2': 32937 tokens in teacher vocab
+   🔗 distilgpt2 alignment: 32841 shared tokens (65.3% teacher, 65.3% student)
+   📚 'bitnet-b1.58': 87780 tokens in teacher vocab
+   🔗 bitnet-b1.58 alignment: 28349 shared tokens (22.1% teacher, 56.4% student)
+   🧬 Attempting: model.safetensors
+   📖 Loading: models/teacher/other/model.safetensors

@@ -1,3 +1,5 @@
+// mod ewc;
+// mod vocab_aligner;
 mod layers;
 mod routing;
 mod config;
@@ -10,10 +12,15 @@ mod distill;
 mod train;
 mod true_distill;
 
+// use crate::layers::vocab_aligner::VocabAlignment;
+use crate::layers::vocab_aligner;
 use crate::layers::ZumarModel;
 use candle_core::Result;
 use candle_nn::VarMap;
 use std::io::{self, Write};
+use crate::tokenizer::ZumarTokenizer;
+
+
 
 fn print_banner() {
     println!("\x1b[1;35m");
@@ -48,7 +55,7 @@ async fn main() -> Result<()> {
     let hidden_size: usize = 1024;
     let num_layers: usize = 12;
     let n_heads: usize = 16;   // بدلاً من 16
-    let kv_heads: usize = 1;  // جديد: رأس واحد لـ K و V
+    let _kv_heads: usize = 1;  // جديد: رأس واحد لـ K و V
     let vocab_size: usize = 50257;
     let num_experts: usize = 8;
     let top_k: usize = 2;
@@ -68,8 +75,7 @@ async fn main() -> Result<()> {
               top_k, n_heads
             )?;
             
-            println!("   📦 model.safetensors + zumar-b1.58.zmr + zumar-b1.58.gguf");
-            println!("\x1b[1;36m🚀 Run: cargo run -p core --release\x1b[0m");
+            
         }
 
         "pack" => {
@@ -361,131 +367,169 @@ fn export_formats(
 
 fn distill_runner(
     args: &Vec<String>,
-    // varmap: &candle_nn::VarMap,  // ← استخدم VarMap مباشرة
     device: &candle_core::Device,
     vocab_size: usize, hidden_size: usize, num_layers: usize,
     num_experts: usize, top_k: usize, n_heads: usize,
-  ) -> Result<()> {
+) -> Result<()> {
+        println!("\n{}", "═".repeat(60));
+    println!("🧬 ZUMAR MULTI-TEACHER DISTILLATION");
+    println!("   Shared Subword Projection + Online EWC");
+    println!("{}", "═".repeat(60));
+
+    // ── إعدادات ─────────────────────────────────────────────
+    let total_epochs: usize = args.get(2)
+        .and_then(|s| s.parse().ok()).unwrap_or(100);
+    let ewc_lambda: f32     = args.get(3)
+        .and_then(|s| s.parse().ok()).unwrap_or(400.0);
+
+    // ── tokenizer الطالب ────────────────────────────────────
+    println!("\n📖 Loading Zumar tokenizer...");
+    let tokenizer = match ZumarTokenizer::load_or_train(
+        "models/tokenizer/tokenizer.json",
+        "data",
+        vocab_size,
+    ) {
+        Ok(t) => {
+            println!("   ✅ vocab={}", t.vocab_size());
+            t
+        }
+        Err(e) => {
+            println!("❌ Tokenizer error: {}", e);
+            return Ok(());
+        }
+    };
+
+    // ── جمع ملفات المعلمين ──────────────────────────────────
     let teacher_dir = std::path::Path::new("models/teacher");
     if !teacher_dir.exists() {
-        println!("\x1b[1;31m❌ models/teacher/ not found\x1b[0m");
+        println!("❌ models/teacher/ not found");
         return Ok(());
     }
 
-    let mut teacher_files: Vec<std::path::PathBuf> = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(teacher_dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().map_or(false, |e| e == "safetensors") {
-                teacher_files.push(path);
-            }
-        }
-    }
+    let mut teacher_paths: Vec<std::path::PathBuf> = Vec::new();
+    collect_teacher_files(teacher_dir, &mut teacher_paths);
 
-    if teacher_files.is_empty() {
-        println!("\x1b[1;31m❌ No safetensors found in models/teacher/\x1b[0m");
+    if teacher_paths.is_empty() {
+        println!("❌ No safetensors found in models/teacher/");
         return Ok(());
     }
 
-    // ✅ ترتيب من الأصغر للأكبر (curriculum: الأبسط أولاً)
-    teacher_files.sort_by(|a, b| {
-        let sa = std::fs::metadata(a).map(|m| m.len()).unwrap_or(0);
-        let sb = std::fs::metadata(b).map(|m| m.len()).unwrap_or(0);
-        sa.cmp(&sb)  // ✅ تصاعدي (كان تنازلياً)
-    });
+    // ✅ ترتيب curriculum: الأصغر أولاً (الأبسط)
+    teacher_paths.sort_by_key(|p| std::fs::metadata(p)
+        .map(|m| m.len()).unwrap_or(0));
 
-    println!("\x1b[1;32m📂 Found {} teacher model(s):\x1b[0m", teacher_files.len());
-    for f in &teacher_files {
-        let size = std::fs::metadata(f)
-            .map(|m| m.len() as f64 / 1_048_576.0)
-            .unwrap_or(0.0);
-        println!("   📄 {} ({:.1} MB)", f.file_name().unwrap().to_string_lossy(), size);
+    println!("\n📂 Found {} teacher(s):", teacher_paths.len());
+    for p in &teacher_paths {
+        let mb = std::fs::metadata(p).map(|m| m.len() as f64 / 1_048_576.0).unwrap_or(0.0);
+        println!("   📄 {} ({:.1} MB)", p.file_name().unwrap().to_string_lossy(), mb);
     }
 
-    let total_epochs: usize = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(50);
-
-    // ✅ إصلاح 1: بناء النموذج والـ VarMap مرة واحدة خارج الحلقة
-    let mut varmap = VarMap::new();
-
-    // ✅ تحميل أوزان سابقة إن وجدت (للاستئناف)
-    let save_path = std::path::Path::new("models/zumar-v1/model.safetensors");
-    if save_path.exists() {
-        println!("\x1b[1;36m♻️  Resuming from existing checkpoint...\x1b[0m");
-        varmap.load(save_path)?;
+    // ── تحميل النموذج (مرة واحدة) ───────────────────────────
+    let mut varmap = candle_nn::VarMap::new();
+    let model_path = std::path::Path::new("models/zumar-v1/model.safetensors");
+    if model_path.exists() {
+        println!("\n♻️  Resuming from checkpoint...");
+        varmap.load(model_path)?;
     }
-
     let vs = candle_nn::VarBuilder::from_varmap(&varmap, candle_core::DType::F32, &device);
-
-    // ✅ بناء مرة واحدة — لن يُعاد تهيئة الأوزان في كل iteration
     let mut model = ZumarModel::new(
         vocab_size, hidden_size, num_layers,
         num_experts, top_k, n_heads, vs,
     )?;
 
-    let training_data = data::TrainingData::load(args.get(3).map(|s| s.as_str()));
-    let all_texts     = training_data.repeat(10);
+    // ── بيانات التدريب ──────────────────────────────────────
+    let training_data = data::TrainingData::load(args.get(4).map(|s| s.as_str()));
+    let all_texts     = training_data.repeat(5);
+    println!("   📊 Training samples: {}", all_texts.len());
 
-    // ── حلقة المعلمين ───────────────────────────────────────────
-    for (i, teacher_path) in teacher_files.iter().enumerate() {
-        println!("\n{}", "=".repeat(60));
-        println!("🧬 Teacher {}/{}: {}",
-            i + 1, teacher_files.len(),
-            teacher_path.file_name().unwrap().to_string_lossy());
-        println!("{}", "=".repeat(60));
+    // ── VocabAligner ────────────────────────────────────────
+    println!("\n🔗 Building vocabulary alignments...");
+    let aligner = match true_distill::prepare_alignments_from_dir(
+        &teacher_paths,
+        "models/tokenizer/tokenizer.json",
+    ) {
+        Ok(a) => a,
+        Err(e) => {
+            println!("❌ Alignment error: {}", e);
+            return Ok(());
+        }
+    };
 
-        // ✅ إصلاح 2: تحميل المعلم مرة واحدة فقط هنا
-        let teacher = match true_distill::AutoTeacher::load(
-            teacher_path.to_str().unwrap(), &device
-        ) {
-            Ok(t) => {
-                let tc = t.get_config();
-                // تخطي المعلم غير المتوافق
-                if tc.arch_type == "skip" || tc.num_layers == 0 {
-                    println!("\x1b[1;33m   ⚠️  Skipping incompatible teacher\x1b[0m");
+    // ── تحميل المعلمين ──────────────────────────────────────
+    let mut teachers_and_alignments: Vec<(true_distill::AutoTeacher, vocab_aligner::VocabAlignment)>
+        = Vec::new();
+
+    for (path, alignment) in teacher_paths.iter().zip(aligner.into_iter()) {
+        // طباعة اسم الم
+          let teacher_label = path.file_name().unwrap().to_string_lossy(); 
+          println!("   🧬 Attempting: {}", teacher_label);  
+          let file_size = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0); 
+          if file_size > 500_000_000 {     
+                eprintln!("   ⚠️  SKIPPING {} ({} MB) - too large for device memory",         
+                teacher_label, 
+                file_size / 1_048_576);     
+                continue;
+          }  
+          match true_distill::AutoTeacher::load(path.to_str().unwrap(), &device) {
+            Ok(teacher) => {
+                if teacher.config.arch_type == "skip" {
+                    println!("   ⚠️  Skipping incompatible: {}",
+                        path.file_name().unwrap().to_string_lossy());
                     continue;
                 }
-                println!("   📊 Teacher: {}d, {}L, {} vocab, {}",
-                    tc.hidden_dim, tc.num_layers, tc.vocab_size, tc.arch_type);
-                t
+                teachers_and_alignments.push((teacher, alignment));
             }
-            Err(e) => {
-                println!("\x1b[1;31m❌ Cannot load: {}\x1b[0m", e);
-                continue;
-            }
-        };
-
-        println!("   📊 Zumar:   {}d, {}L, {} vocab",
-            hidden_size, num_layers, vocab_size);
-
-        // ✅ إصلاح 3: distiller يستقبل المعلم مباشرة — لا تحميل ثانٍ
-        let config = true_distill::DistillConfig {
-            epochs:        total_epochs,
-            learning_rate: 0.001,
-            temperature:   3.0,
-        };
-        let distiller = true_distill::TrueDistiller::new(config, device.clone());
-
-        match distiller.distill(&mut model, &varmap, &teacher, &all_texts) {
-            Ok(_) => {
-                // حفظ بعد كل معلم
-                std::fs::create_dir_all(save_path.parent().unwrap()).ok();
-                varmap.save(save_path)?;
-                println!("✅ Teacher {}/{} complete — checkpoint saved", i + 1, teacher_files.len());
-            }
-            Err(e) => println!("\x1b[1;31m❌ Failed: {}\x1b[0m", e),
+            Err(e) => println!("   ❌ Load failed: {}", e),
         }
-
-        // ✅ تحرير الذاكرة قبل تحميل المعلم التالي
-        drop(teacher);
     }
 
-    // تصدير تلقائي بعد كل المعلمين
-    println!("\n\x1b[1;33m📦 Auto-exporting to .zmr + .gguf...\x1b[0m");
+    if teachers_and_alignments.is_empty() {
+        println!("❌ No usable teachers found");
+        return Ok(());
+    }
+
+    // ── تشغيل التقطير ───────────────────────────────────────
+    let config = true_distill::DistillConfig {
+        epochs:      total_epochs,
+        base_lr:     1e-3,
+        temperature: 3.0,
+        ewc_lambda,
+        accum_steps: 4,
+        save_every:  10,
+    };
+    let distiller = true_distill::TrueDistiller::new(config, device.clone());
+
+    distiller.distill_multi(
+        &mut model,
+        &varmap,
+        &teachers_and_alignments,
+        &all_texts,
+        &tokenizer,
+    )?;
+
+    // ── تصدير تلقائي ────────────────────────────────────────
+    println!("\n📦 Exporting .zmr + .gguf...");
     export_formats(
         &varmap, &device,
         vocab_size, hidden_size, num_layers,
         num_experts, top_k, n_heads,
     )?;
-    println!("\n\x1b[1;32m🎉 ALL {} TEACHERS DISTILLED!\x1b[0m", teacher_files.len());
-    return Ok(());
+
+    println!("\n🎉 DISTILLATION COMPLETE!");
+    println!("   Run: cargo run -p core --release");
+    Ok(())
+}
+
+/// البحث العودي عن ملفات `.safetensors` داخل مجلد المعلم
+fn collect_teacher_files(dir: &std::path::Path, files: &mut Vec<std::path::PathBuf>) {
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                collect_teacher_files(&path, files); // تابع البحث في المجلدات الفرعية
+            } else if path.extension().map_or(false, |e| e == "safetensors") {
+                files.push(path);
+            }
+        }
+    }
 }

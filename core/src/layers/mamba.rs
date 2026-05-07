@@ -73,7 +73,7 @@ impl ZumarMambaBlock {
     fn apply_conv1d(&self, x: &Tensor) -> Result<Tensor> {
         // x: [b, seq, d_inner]
         // Conv1d في candle يتوقع [b, channels, seq]
-        let (b, seq, d) = x.dims3()?;
+        let (_b, seq, _d) = x.dims3()?;
 
         // [b, seq, d] → [b, d, seq]
         let x_t = x.transpose(1, 2)?;

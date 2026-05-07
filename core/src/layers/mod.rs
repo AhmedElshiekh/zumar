@@ -3,6 +3,8 @@ pub mod moe;
 pub mod mamba;
 pub mod attention;
 pub mod snn;
+pub mod vocab_aligner;
+pub mod ewc;
 
 use crate::layers::bitlinear::ZumarBitLinear;
 use crate::layers::moe::ZumarMoE;
