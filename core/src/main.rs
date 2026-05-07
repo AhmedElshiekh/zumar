@@ -496,6 +496,8 @@ fn distill_runner(
         ewc_lambda,
         accum_steps: 4,
         save_every:  10,
+        lora_rank: 8,
+        lora_alpha: 16.0,
     };
     let distiller = true_distill::TrueDistiller::new(config, device.clone());
 

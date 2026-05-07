@@ -1,11 +1,16 @@
-[1m[92m   Compiling[0m core v2.2.0 (/root/projects/zumar/core)
+[1m[33mwarning[0m[1m: unused imports: `DType` and `Device`[0m
+ [1m[94m--> [0mcore/src/layers/lora.rs:1:35
+  [1m[94m|[0m
+[1m[94m1[0m [1m[94m|[0m use candle_core::{Tensor, Result, Device, DType};
+  [1m[94m|[0m                                   [1m[33m^^^^^^[0m  [1m[33m^^^^^[0m
+  [1m[94m|[0m
+  [1m[94m= [0m[1mnote[0m: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
 [1m[33mwarning[0m[1m: unused import: `bf16`[0m
   [1m[94m--> [0mcore/src/true_distill.rs:11:17
    [1m[94m|[0m
 [1m[94m11[0m [1m[94m|[0m use half::{f16, bf16};
    [1m[94m|[0m                 [1m[33m^^^^[0m
-   [1m[94m|[0m
-   [1m[94m= [0m[1mnote[0m: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
 
 [1m[33mwarning[0m[1m: unused import: `Optimizer`[0m
  [1m[94m--> [0mcore/src/layers/ewc.rs:2:25
@@ -19,26 +24,43 @@
 [1m[94m64[0m [1m[94m|[0m         use std::io::{BufReader, BufRead, Read};
    [1m[94m|[0m                                           [1m[33m^^^^[0m
 
-[1m[33mwarning[0m[1m: unused variable: `h`[0m
-   [1m[94m--> [0mcore/src/true_distill.rs:528:20
-    [1m[94m|[0m
-[1m[94m528[0m [1m[94m|[0m     fn detect_arch(h: &serde_json::Value) -> Teach[1m[94m...[0m
-    [1m[94m|[0m                    [1m[33m^[0m [1m[33mhelp: if this is intentional, prefix it with an underscore: `_h`[0m
-    [1m[94m|[0m
-    [1m[94m= [0m[1mnote[0m: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
-
-[1m[33mwarning[0m[1m: fields `hidden_size` and `vocab_size` are never read[0m
-  [1m[94m--> [0mcore/src/layers/mod.rs:32:9
+[1m[33mwarning[0m[1m: unused variable: `device`[0m
+  [1m[94m--> [0mcore/src/layers/lora.rs:30:13
    [1m[94m|[0m
-[1m[94m27[0m [1m[94m|[0m pub struct ZumarModel {
+[1m[94m30[0m [1m[94m|[0m         let device = vs.device();
+   [1m[94m|[0m             [1m[33m^^^^^^[0m [1m[33mhelp: if this is intentional, prefix it with an underscore: `_device`[0m
+   [1m[94m|[0m
+   [1m[94m= [0m[1mnote[0m: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+[1m[33mwarning[0m[1m: unused variable: `h`[0m
+   [1m[94m--> [0mcore/src/true_distill.rs:536:20
+    [1m[94m|[0m
+[1m[94m536[0m [1m[94m|[0m     fn detect_arch(h: &serde_json::Value) -> Teach[1m[94m...[0m
+    [1m[94m|[0m                    [1m[33m^[0m [1m[33mhelp: if this is intentional, prefix it with an underscore: `_h`[0m
+
+[1m[33mwarning[0m[1m: fields `lora_q` and `lora_v` are never read[0m
+  [1m[94m--> [0mcore/src/layers/mod.rs:27:9
+   [1m[94m|[0m
+[1m[94m17[0m [1m[94m|[0m pub struct ZumarBlock {
    [1m[94m|[0m            [1m[94m----------[0m [1m[94mfields in this struct[0m
 [1m[94m...[0m
-[1m[94m32[0m [1m[94m|[0m     pub hidden_size: usize,
-   [1m[94m|[0m         [1m[33m^^^^^^^^^^^[0m
-[1m[94m33[0m [1m[94m|[0m     pub vocab_size:  usize,
-   [1m[94m|[0m         [1m[33m^^^^^^^^^^[0m
+[1m[94m27[0m [1m[94m|[0m     pub lora_q: Option<crate::layers::lora::LoRALin[1m[94m...[0m
+   [1m[94m|[0m         [1m[33m^^^^^^[0m
+[1m[94m28[0m [1m[94m|[0m     pub lora_v: Option<crate::layers::lora::LoRALin[1m[94m...[0m
+   [1m[94m|[0m         [1m[33m^^^^^^[0m
    [1m[94m|[0m
    [1m[94m= [0m[1mnote[0m: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+[1m[33mwarning[0m[1m: fields `hidden_size` and `vocab_size` are never read[0m
+  [1m[94m--> [0mcore/src/layers/mod.rs:36:9
+   [1m[94m|[0m
+[1m[94m31[0m [1m[94m|[0m pub struct ZumarModel {
+   [1m[94m|[0m            [1m[94m----------[0m [1m[94mfields in this struct[0m
+[1m[94m...[0m
+[1m[94m36[0m [1m[94m|[0m     pub hidden_size: usize,
+   [1m[94m|[0m         [1m[33m^^^^^^^^^^^[0m
+[1m[94m37[0m [1m[94m|[0m     pub vocab_size:  usize,
+   [1m[94m|[0m         [1m[33m^^^^^^^^^^[0m
 
 [1m[33mwarning[0m[1m: associated items `from_zmr` and `to_packed_bytes` are never used[0m
   [1m[94m--> [0mcore/src/layers/bitlinear.rs:40:12
@@ -166,6 +188,35 @@
    [1m[94m|[0m         [1m[33m^^^^^^^^^^^^^^^[0m
    [1m[94m|[0m
    [1m[94m= [0m[1mnote[0m: `FisherCheckpoint` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+[1m[33mwarning[0m[1m: method `loss_differentiable` is never used[0m
+   [1m[94m--> [0mcore/src/layers/ewc.rs:185:12
+    [1m[94m|[0m
+[1m[94m 37[0m [1m[94m|[0m impl EWC {
+    [1m[94m|[0m [1m[94m--------[0m [1m[94mmethod in this implementation[0m
+[1m[94m...[0m
+[1m[94m185[0m [1m[94m|[0m     pub fn loss_differentiable(&self, varmap: &Var[1m[94m...[0m
+    [1m[94m|[0m            [1m[33m^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[33mwarning[0m[1m: associated items `new`, `set_active`, and `merge` are never used[0m
+  [1m[94m--> [0mcore/src/layers/lora.rs:21:12
+   [1m[94m|[0m
+[1m[94m20[0m [1m[94m|[0m impl LoRALinear {
+   [1m[94m|[0m [1m[94m---------------[0m [1m[94massociated items in this implementation[0m
+[1m[94m21[0m [1m[94m|[0m     pub fn new(
+   [1m[94m|[0m            [1m[33m^^^[0m
+[1m[94m...[0m
+[1m[94m58[0m [1m[94m|[0m     pub fn set_active(&mut self, active: bool) {
+   [1m[94m|[0m            [1m[33m^^^^^^^^^^[0m
+[1m[94m...[0m
+[1m[94m63[0m [1m[94m|[0m     pub fn merge(&self) -> Result<Tensor> {
+   [1m[94m|[0m            [1m[33m^^^^^[0m
+
+[1m[33mwarning[0m[1m: function `apply_lora_to_bitlinear` is never used[0m
+  [1m[94m--> [0mcore/src/layers/lora.rs:94:8
+   [1m[94m|[0m
+[1m[94m94[0m [1m[94m|[0m pub fn apply_lora_to_bitlinear(
+   [1m[94m|[0m        [1m[33m^^^^^^^^^^^^^^^^^^^^^^^[0m
 
 [1m[33mwarning[0m[1m: struct `ZumarConfig` is never constructed[0m
   [1m[94m--> [0mcore/src/config.rs:13:12
@@ -328,17 +379,28 @@
 [1m[94m118[0m [1m[94m|[0m     pub fn usage_report(&self) -> String {
     [1m[94m|[0m            [1m[33m^^^^^^^^^^^^[0m
 
+[1m[33mwarning[0m[1m: fields `lora_rank` and `lora_alpha` are never read[0m
+  [1m[94m--> [0mcore/src/true_distill.rs:25:9
+   [1m[94m|[0m
+[1m[94m17[0m [1m[94m|[0m pub struct DistillConfig {
+   [1m[94m|[0m            [1m[94m-------------[0m [1m[94mfields in this struct[0m
+[1m[94m...[0m
+[1m[94m25[0m [1m[94m|[0m     pub lora_rank: usize,     // الرتبة (مثلاً 8)
+   [1m[94m|[0m         [1m[33m^^^^^^^^^[0m
+[1m[94m26[0m [1m[94m|[0m     pub lora_alpha: f64,      // معامل القياس (مثلاً[1m[94m...[0m
+   [1m[94m|[0m         [1m[33m^^^^^^^^^^[0m
+
 [1m[33mwarning[0m[1m: method `get_config` is never used[0m
-   [1m[94m--> [0mcore/src/true_distill.rs:333:12
+   [1m[94m--> [0mcore/src/true_distill.rs:341:12
     [1m[94m|[0m
-[1m[94m301[0m [1m[94m|[0m impl AutoTeacher {
+[1m[94m309[0m [1m[94m|[0m impl AutoTeacher {
     [1m[94m|[0m [1m[94m----------------[0m [1m[94mmethod in this implementation[0m
 [1m[94m...[0m
-[1m[94m333[0m [1m[94m|[0m     pub fn get_config(&self) -> &TeacherConfig { &[1m[94m...[0m
+[1m[94m341[0m [1m[94m|[0m     pub fn get_config(&self) -> &TeacherConfig { &[1m[94m...[0m
     [1m[94m|[0m            [1m[33m^^^^^^^^^^[0m
 
-[1m[33mwarning[0m: `core` (bin "core") generated 32 warnings (run `cargo fix --bin "core" -p core` to apply 2 suggestions)
-[1m[92m    Finished[0m `release` profile [optimized] target(s) in 48.76s
+[1m[33mwarning[0m: `core` (bin "core") generated 39 warnings (run `cargo fix --bin "core" -p core` to apply 4 suggestions)
+[1m[92m    Finished[0m `release` profile [optimized] target(s) in 15.23s
 [1m[92m     Running[0m `/tmp/cargo_target/release/core distill 10 /data`
 [1;35m
 
@@ -369,25 +431,71 @@ Usage:
 ════════════════════════════════════════════════════════════
 
 📖 Loading Zumar tokenizer...
-📖 Loading tokenizer from models/tokenizer/tokenizer.json
-   ✅ vocab=50257
+🔨 Tokenizer not found — training from data
+
+🔨 BUILDING BPE TOKENIZER (streaming)
+   Vocab size: 50257
+
+
+
+   ✅ Tokenizer ready → vocab size: 131
+   ✅ vocab=131
 
 📂 Found 3 teacher(s):
    📄 model.safetensors (256.6 MB)
    📄 model.safetensors (336.5 MB)
    📄 model.safetensors (1124.0 MB)
-
-♻️  Resuming from checkpoint...
 📚 Using built-in training data
    📊 Training samples: 50
 
 🔗 Building vocabulary alignments...
-   📚 Student vocab loaded: 32937 tokens
+   📚 Student vocab loaded: 105 tokens
    📚 'other': 32930 tokens in teacher vocab
-   🔗 other alignment: 24930 shared tokens (50.7% teacher, 49.6% student)
+   🔗 other alignment: 0 shared tokens (0.0% teacher, 0.0% student)
    📚 'distilgpt2': 32937 tokens in teacher vocab
-   🔗 distilgpt2 alignment: 32841 shared tokens (65.3% teacher, 65.3% student)
+   🔗 distilgpt2 alignment: 0 shared tokens (0.0% teacher, 0.0% student)
    📚 'bitnet-b1.58': 87780 tokens in teacher vocab
-   🔗 bitnet-b1.58 alignment: 28349 shared tokens (22.1% teacher, 56.4% student)
+   🔗 bitnet-b1.58 alignment: 0 shared tokens (0.0% teacher, 0.0% student)
    🧬 Attempting: model.safetensors
    📖 Loading: models/teacher/other/model.safetensors
+   📊 gpt2: 768d 6L vocab=50257 tensors=272 tokenizer=✅
+   🧬 Attempting: model.safetensors
+   📖 Loading: models/teacher/distilgpt2/model.safetensors
+   📊 gpt2: 768d 6L vocab=50257 tensors=82 tokenizer=✅
+   🧬 Attempting: model.safetensors
+   ⚠️  SKIPPING model.safetensors (1124 MB) - too large for device memory
+   ℹ️  No EWC checkpoint found — starting fresh
+
+════════════════════════════════════════════════════════════
+🧬 MULTI-TEACHER DISTILLATION (mmap + causal attn)
+   Teachers: 2  |  Samples: 50
+   Resume:   teacher=0 epoch=0
+
+   📐 EWC Status:
+     Teachers consolidated: 0
+     Lambda:                400
+     Recommended LR decay:  1.0000
+════════════════════════════════════════════════════════════
+
+════════════════════════════════════════════════════════════
+🧬 Teacher 1/2: gpt2
+   Shared: 0 tokens | Teacher coverage: 0.0% | Student coverage: 0.0% | Weight: 0.000
+════════════════════════════════════════════════════════════
+
+🧠 DISTILLATION: gpt2
+   Epochs:  0 → 10
+   LR:      1.00e-3
+   Temp:    3
+   EWC λ:   400
+   Overlap: 0 tokens
+   ⚠️  Insufficient overlap (<1000) — skipping
+
+   ⏭️  Skipping 'gpt2' (already done)
+
+🎉 ALL TEACHERS DONE!
+
+📦 Exporting .zmr + .gguf...
+[1;31m❌ No model found. Train first.[0m
+
+🎉 DISTILLATION COMPLETE!
+   Run: cargo run -p core --release

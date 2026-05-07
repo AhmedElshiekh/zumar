@@ -21,8 +21,10 @@ pub struct DistillConfig {
     pub ewc_lambda:  f32,
     pub accum_steps: usize,
     pub save_every:  usize,
+    // LoRA
+    pub lora_rank: usize,     // الرتبة (مثلاً 8)
+    pub lora_alpha: f64,      // معامل القياس (مثلاً 16.0)
 }
-
 impl Default for DistillConfig {
     fn default() -> Self {
         Self {
@@ -32,6 +34,8 @@ impl Default for DistillConfig {
             ewc_lambda:  400.0,
             accum_steps: 4,
             save_every:  10,
+            lora_rank: 8,
+            lora_alpha: 16.0,
         }
     }
 }
@@ -166,8 +170,12 @@ impl TrueDistiller {
                         &self.device,
                     )?;
 
-                    let ewc_loss = ewc.loss_differentiable(varmap, &self.device)?;
-                    let total_loss = (&kl + &ewc_loss)?;
+                    // let ewc_loss = ewc.loss_differentiable(varmap, &self.device)?;
+                    // let total_loss = (&kl + &ewc_loss)?;
+                    // استخدام EWC Loss عددية (أخف بكثير)
+                    let ewc_val = ewc.loss(varmap, &self.device)?;
+                    let ewc_scalar = ewc_val.to_scalar::<f32>().unwrap_or(0.0);
+                    let total_loss = (&kl + ewc_scalar as f64)?;  // إضافة قيمة عددية إلى KL
 
                     let kl_val = kl.to_scalar::<f32>().unwrap_or(0.0);
                     loss_sum    += kl_val;

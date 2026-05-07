@@ -238,31 +238,11 @@ impl EWC {
     // ════════════════════════════════════════════════════════
 
     /// حفظ حالة EWC كاملة
-    // pub fn save(&self, path: &str) -> Result<()> {
-    //     let state = EWCState {
-    //         cumulative_fisher:  self.cumulative_fisher.clone(),
-    //         cumulative_optimal: self.cumulative_optimal.clone(),
-    //         lambda:             self.lambda,
-    //         num_teachers:       self.num_teachers,
-    //         history_names:      self.history.iter()
-    //             .map(|h| h.teacher_name.clone())
-    //             .collect(),
-    //     };
-    //     let json = serde_json::to_string(&state)
-    //         .map_err(|e| candle_core::Error::Msg(e.to_string()))?;
-    //     std::fs::create_dir_all(
-    //         Path::new(path).parent().unwrap_or(Path::new("."))
-    //     ).ok();
-    //     std::fs::write(path, json)
-    //         .map_err(|e| candle_core::Error::Msg(e.to_string()))?;
-    //     println!("   💾 EWC state saved → {}", path);
-    //     Ok(())
-    // }
-
     pub fn save(&self, path: &str) -> Result<()> {
+        // حفظ metadata فقط (بدون cumulative_fisher/optimal)
         let state = EWCState {
-            cumulative_fisher:  self.cumulative_fisher.clone(),
-            cumulative_optimal: self.cumulative_optimal.clone(),
+            cumulative_fisher:  HashMap::new(),  // لا تحفظ Fisher
+            cumulative_optimal: HashMap::new(),  // لا تحفظ optimal
             lambda:             self.lambda,
             num_teachers:       self.num_teachers,
             history_names:      self.history.iter().map(|h| h.teacher_name.clone()).collect(),
@@ -275,29 +255,9 @@ impl EWC {
         println!("   💾 EWC state saved → {}", path);
         Ok(())
     }
+        
 
-    /// تحميل حالة EWC
-    // pub fn load(path: &str, lambda: f32) -> Result<Self> {
-    //     if !Path::new(path).exists() {
-    //         println!("   ℹ️  No EWC checkpoint found — starting fresh");
-    //         return Ok(Self::new(lambda));
-    //     }
-    //     let json = std::fs::read_to_string(path)
-    //         .map_err(|e| candle_core::Error::Msg(e.to_string()))?;
-    //     let state: EWCState = serde_json::from_str(&json)
-    //         .map_err(|e| candle_core::Error::Msg(e.to_string()))?;
-
-    //     println!("   ♻️  EWC loaded — {} teacher(s) consolidated: {:?}",
-    //         state.num_teachers, state.history_names);
-
-    //     Ok(Self {
-    //         cumulative_fisher:  state.cumulative_fisher,
-    //         cumulative_optimal: state.cumulative_optimal,
-    //         lambda:             state.lambda,
-    //         num_teachers:       state.num_teachers,
-    //         history:            Vec::new(),
-    //     })
-    // }
+    /// تحميل حالة EW
     
     pub fn load(path: &str, lambda: f32) -> Result<Self> {
         if !Path::new(path).exists() {
@@ -312,14 +272,14 @@ impl EWC {
         println!("   ♻️  EWC loaded — {} teacher(s) consolidated: {:?}", state.num_teachers, state.history_names);
     
         Ok(Self {
-            cumulative_fisher:  state.cumulative_fisher,
-            cumulative_optimal: state.cumulative_optimal,
+            cumulative_fisher:  HashMap::new(),  // فارغ - سنعيد حسابه لاحقاً
+            cumulative_optimal: HashMap::new(),  // فارغ
             lambda:             state.lambda,
             num_teachers:       state.num_teachers,
             history:            Vec::new(),
         })
     }
-
+    
     /// معدل التعلم المناسب بحسب عدد المعلمين السابقين
     /// كلما تعلمنا من معلمين أكثر، قللنا الـ LR
     pub fn recommended_lr(&self, base_lr: f64) -> f64 {

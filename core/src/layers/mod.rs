@@ -5,6 +5,7 @@ pub mod attention;
 pub mod snn;
 pub mod vocab_aligner;
 pub mod ewc;
+pub mod lora;
 
 use crate::layers::bitlinear::ZumarBitLinear;
 use crate::layers::moe::ZumarMoE;
@@ -22,6 +23,9 @@ pub struct ZumarBlock {
     pub attention: ZumarFlashAttention,
     pub moe:       ZumarMoE,
     pub post_norm: LayerNorm,
+    // إضافة LoRA
+    pub lora_q: Option<crate::layers::lora::LoRALinear>,
+    pub lora_v: Option<crate::layers::lora::LoRALinear>,
 }
 
 pub struct ZumarModel {
@@ -62,7 +66,19 @@ impl ZumarBlock {
         let moe       = ZumarMoE::new(in_dim, num_experts, top_k, vs.pp("mlp"))?;
         let post_norm = candle_nn::layer_norm(in_dim, 1e-5, vs.pp("post_attention_layernorm"))?;
 
-        Ok(Self { pre_norm, q_proj, k_proj, v_proj, o_proj, attention, moe, post_norm })
+        // Ok(Self { pre_norm, q_proj, k_proj, v_proj, o_proj, attention, moe, post_norm })
+        Ok(Self { 
+            pre_norm, 
+            q_proj, 
+            k_proj, 
+            v_proj, 
+            o_proj, 
+            attention, 
+            moe, 
+            post_norm,
+            lora_q: None,
+            lora_v: None,
+        })
     }
 
     pub fn forward(&mut self, x: &Tensor) -> Result<Tensor> {
@@ -137,7 +153,18 @@ impl ZumarBlock {
             device: device.clone(),
         };
 
-        Ok(Self { pre_norm, q_proj, k_proj, v_proj, o_proj, attention, moe, post_norm })
+        Ok(Self { 
+            pre_norm, 
+            q_proj, 
+            k_proj, 
+            v_proj, 
+            o_proj, 
+            attention, 
+            moe, 
+            post_norm,
+            lora_q: None,
+            lora_v: None,
+        })
     }
 }
 
