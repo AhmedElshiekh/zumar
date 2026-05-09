@@ -70,63 +70,57 @@ impl ZumarMoE {
         let (b, s, h) = x.dims3()?;
         let flat_dim  = b * s;
         let x_flat    = x.reshape((flat_dim, h))?;
-
-        // ── حساب احتمالات التوجيه ───────────────────────────────
-        let router_logits = self.gate.forward(&x_flat)?;           // [flat, num_experts]
+    
+        // حساب احتمالات التوجيه
+        let router_logits = self.gate.forward(&x_flat)?;
         let routing_probs = candle_nn::ops::softmax(&router_logits, 1)?;
-
-        // ── التجميع عبر كل token ────────────────────────────────
+        let probs_vec = routing_probs.to_vec2::<f32>()?;
+    
         let mut output = x_flat.zeros_like()?;
-
-        // نُحوّل routing_probs إلى Vec لاستخراج الـ top-k
-        let probs_vec = routing_probs.to_vec2::<f32>()?;  // [flat, num_experts]
-
+    
+        // ✅ معالجة كل Token على حدة مع تحرير فوري للذاكرة
         for token_idx in 0..flat_dim {
             let token_probs = &probs_vec[token_idx];
-
-            // ✅ إصلاح: استخراج top-k indices الحقيقية من الـ gate
             let top_indices = Self::topk_indices(token_probs, self.top_k.min(self.num_experts));
-
-            // استخراج token واحد [1, h]
+            
             let token = x_flat.narrow(0, token_idx, 1)?;
             let mut token_out = token.zeros_like()?;
-
+            let mut weight_sum = 0.0f32;
+    
             for &expert_idx in &top_indices {
                 let weight = token_probs[expert_idx];
-                if weight < 1e-6 { continue; }  // تخطي الخبراء ذوي الوزن الضئيل
-
-                let expert     = self.get_expert(expert_idx)?;
-                let expert_out = expert.forward(&token)?;  // [1, h]
-
-                // تطبيق وزن الخبير
-                let w_tensor   = Tensor::new(&[weight], &self.device)?
-                    .reshape((1, 1))?;
+                if weight < 1e-6 { continue; }
+    
+                let expert = self.get_expert(expert_idx)?;
+                let expert_out = expert.forward(&token)?;
+                let w_tensor = Tensor::new(&[weight], &self.device)?.reshape((1, 1))?;
                 token_out = (token_out + expert_out.broadcast_mul(&w_tensor)?)?;
+                weight_sum += weight;
+                
+                // ✅ تحرير فوري
+                drop(expert_out);
             }
-
-            // ✅ تطبيع الوزن: قسمة على مجموع أوزان الخبراء المختارين
-            let weight_sum: f32 = top_indices.iter()
-                .map(|&i| token_probs[i])
-                .sum();
-
+    
             if weight_sum > 1e-6 {
-                let norm = Tensor::new(&[weight_sum], &self.device)?
-                    .reshape((1, 1))?;
+                let norm = Tensor::new(&[weight_sum], &self.device)?.reshape((1, 1))?;
                 token_out = token_out.broadcast_div(&norm)?;
             }
-
-            // وضع نتيجة الـ token في المخرجات
+    
+            // وضع النتيجة في المخرجات
             let mask = {
                 let mut m = vec![0.0f32; flat_dim];
                 m[token_idx] = 1.0;
                 Tensor::new(m.as_slice(), &self.device)?.reshape((flat_dim, 1))?
             };
             output = (output + token_out.expand((flat_dim, h))?.broadcast_mul(&mask)?)?;
+            
+            // ✅ تحرير token_out
+            drop(token_out);
         }
-
+    
         output.reshape((b, s, h))
     }
-
+    
     /// forward_selective: للاستخدام مع ZumarHybridBlock
     pub fn forward_selective(
         &mut self,

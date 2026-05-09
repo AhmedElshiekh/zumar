@@ -55,9 +55,9 @@ async fn main() -> Result<()> {
     let hidden_size: usize = 1024;
     let num_layers: usize = 12;
     let n_heads: usize = 16;   // بدلاً من 16
-    let _kv_heads: usize = 1;  // جديد: رأس واحد لـ K و V
+    let kv_heads: usize = 4;  // جديد: رأس واحد لـ K و V
     let vocab_size: usize = 50257;
-    let num_experts: usize = 8;
+    let num_experts: usize = 6;
     let top_k: usize = 2;
     
     let router = routing::HardwareRouter::new();
@@ -88,8 +88,19 @@ async fn main() -> Result<()> {
             print_usage();
             println!("\n🎓 SELF-TRAINING MODE\n");
             let varmap = VarMap::new();
-            let vs = candle_nn::VarBuilder::from_varmap(&varmap, candle_core::DType::F32, &device);
-            let mut model = ZumarModel::new(vocab_size, hidden_size, num_layers, num_experts, top_k, n_heads, vs.clone())?;
+            // let vs = candle_nn::VarBuilder::from_varmap(&varmap, candle_core::DType::F32, &device);
+            // let mut model = ZumarModel::new(vocab_size, hidden_size, num_layers, num_experts, top_k, n_heads, vs.clone())?;
+            // // تفعيل QLoRA
+            // println!("   🧬 Activating QLoRA (NF4 + LoRA rank=8)...");
+            // model.add_qlora(8, 16.0)?;
+            // بناء النموذج مع QLoRA مباشرة
+          let vs = candle_nn::VarBuilder::from_varmap(&varmap, candle_core::DType::F32, &device);
+          let mut model = ZumarModel::new_qlora(
+              vocab_size, hidden_size, num_layers,
+              num_experts, top_k, n_heads, vs,
+              8,   // rank
+              16.0 // alpha
+          )?;
             let epochs: usize = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(5);
             train::run_training(&mut model, &varmap, &device, None, epochs)?;
             let save_dir = std::path::Path::new("models/zumar-v1");
@@ -230,7 +241,7 @@ fn export_formats(
     varmap: &candle_nn::VarMap,  // ← استخدم VarMap مباشرة
     device: &candle_core::Device,
     vocab_size: usize, hidden_size: usize, num_layers: usize,
-    num_experts: usize, _top_k: usize, n_heads: usize,
+    num_experts: usize, top_k: usize, n_heads: usize,
 ) -> Result<()> {
     
     let save_path = std::path::Path::new("models/zumar-v1").join("model.safetensors");
@@ -239,8 +250,16 @@ fn export_formats(
         return Ok(());
     }
     
-    let vs = candle_nn::VarBuilder::from_varmap(varmap, candle_core::DType::F32, device);
-    let model = ZumarModel::new(vocab_size, hidden_size, num_layers, num_experts, 2, n_heads, vs)?;
+    // let vs = candle_nn::VarBuilder::from_varmap(varmap, candle_core::DType::F32, device);
+    // let model = ZumarModel::new(vocab_size, hidden_size, num_layers, num_experts, 2, n_heads, vs)?;
+     // بناء النموذج مع QLoRA مباشرة
+    let vs = candle_nn::VarBuilder::from_varmap(&varmap, candle_core::DType::F32, &device);
+    let mut model = ZumarModel::new_qlora(
+        vocab_size, hidden_size, num_layers,
+        num_experts, top_k, n_heads, vs,
+        8,   // rank
+        16.0 // alpha
+    )?;
     
     let orig_mb = std::fs::metadata(&save_path).map(|m| m.len() as f64 / 1_048_576.0).unwrap_or(0.0);
     println!("\x1b[1;33m🔢 Quantizing to BitNet b1.58 (2-bit packed)...\x1b[0m");
@@ -432,11 +451,21 @@ fn distill_runner(
         varmap.load(model_path)?;
     }
     let vs = candle_nn::VarBuilder::from_varmap(&varmap, candle_core::DType::F32, &device);
-    let mut model = ZumarModel::new(
+    // let mut model = ZumarModel::new(
+    //     vocab_size, hidden_size, num_layers,
+    //     num_experts, top_k, n_heads, vs,
+    // )?;
+    // // تفعيل QLoRA
+    println!("   🧬 Activating QLoRA (NF4 + LoRA rank=8)...");
+    // model.add_qlora(8, 16.0)?;
+    // بناء النموذج مع QLoRA مباشرة
+    let mut model = ZumarModel::new_qlora(
         vocab_size, hidden_size, num_layers,
         num_experts, top_k, n_heads, vs,
+        8,   // rank
+        16.0 // alpha
     )?;
-
+    
     // ── بيانات التدريب ──────────────────────────────────────
     let training_data = data::TrainingData::load(args.get(4).map(|s| s.as_str()));
     let all_texts     = training_data.repeat(5);
@@ -491,11 +520,11 @@ fn distill_runner(
     // ── تشغيل التقطير ───────────────────────────────────────
     let config = true_distill::DistillConfig {
         epochs:      total_epochs,
-        base_lr:     1e-3,
-        temperature: 3.0,
+        base_lr:     0.01,  //1e-3,
+        temperature: 1.0,  //3.0,
         ewc_lambda,
-        accum_steps: 4,
-        save_every:  10,
+        accum_steps: 1, //4,
+        save_every:  5,  //10,
         lora_rank: 8,
         lora_alpha: 16.0,
     };

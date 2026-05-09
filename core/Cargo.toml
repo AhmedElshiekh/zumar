@@ -41,3 +41,4 @@ metal = ["candle-core/metal"] # دعم أجهزة Mac M3/M4/M5
 accelerate = ["candle-core/accelerate"]
 #mkl = ["dep:intel-mkl-src", "candle-core/mkl", "candle-nn/mkl"]
 blas = ["dep:openblas-src"]
+

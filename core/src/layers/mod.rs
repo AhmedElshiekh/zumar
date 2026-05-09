@@ -95,33 +95,33 @@ impl ZumarBlock {
         let moe_out    = self.moe.forward(&normed_2)?;
         residual_2 + moe_out
     }
-
+    
     pub fn forward_checkpointed(&mut self, x: &Tensor) -> Result<Tensor> {
         let residual = x.clone();
-
         let attn_out = {
             let normed = self.pre_norm.forward(x)?;
-            let q      = self.q_proj.forward(&normed)?;
-            let k      = self.k_proj.forward(&normed)?;
-            let v      = self.v_proj.forward(&normed)?;
-            let attn   = self.attention.forward(&q, &k, &v)?;
-            let out    = self.o_proj.forward(&attn)?;
+            let q = self.q_proj.forward(&normed)?;
+            let k = self.k_proj.forward(&normed)?;
+            let v = self.v_proj.forward(&normed)?;
+            let attn = self.attention.forward(&q, &k, &v)?;
+            let out = self.o_proj.forward(&attn)?;
             drop(normed); drop(q); drop(k); drop(v); drop(attn);
             out
         };
-
-        let x          = (residual + attn_out)?;
+        let x = (residual + attn_out)?;
         let residual_2 = x.clone();
-        let moe_out    = {
+        let moe_out = {
             let normed = self.post_norm.forward(&x)?;
-            let out    = self.moe.forward(&normed)?;
+            let out = self.moe.forward(&normed)?;
+            // let out = normed.clone();
             drop(normed);
             out
         };
-
-        residual_2 + moe_out
+        // ✅ تحرير x الأصلي
+        let result = residual_2 + moe_out;
+        Ok(result?)
     }
-
+        
     pub fn from_packed_blocks(
         in_dim: usize, num_experts: usize, n_heads: usize,
         layer_blocks: &[PackedBlockRef], device: &Device,
@@ -186,6 +186,29 @@ impl ZumarModel {
         let lm_head    = ZumarBitLinear::new(in_dim, vocab_size, vs.pp("lm_head"))?;
         Ok(Self { embedding, layers, final_norm, lm_head, hidden_size: in_dim, vocab_size })
     }
+    pub fn new_qlora(
+        vocab_size: usize, in_dim: usize, num_layers: usize,
+        num_experts: usize, top_k: usize, n_heads: usize,
+        vs: VarBuilder, rank: usize, alpha: f64,
+    ) -> Result<Self> {
+        let embedding = candle_nn::embedding(vocab_size, in_dim, vs.pp("model.embed_tokens"))?;
+        let mut layers = Vec::with_capacity(num_layers);
+        for i in 0..num_layers {
+            // بناء طبقة واحدة
+            let block_vs = vs.pp(format!("model.layers.{}", i));
+            let mut block = ZumarBlock::new(in_dim, num_experts, top_k, n_heads, block_vs)?;
+            // تكميم فوري لهذه الطبقة فقط
+            block.q_proj.quantize_to_nf4()?;
+            block.v_proj.quantize_to_nf4()?;
+            block.o_proj.quantize_to_nf4()?;
+            // إضافة LoRA (اختياري، يمكن تركه للمرحلة التالية)
+            layers.push(block);
+        }
+        let final_norm = candle_nn::layer_norm(in_dim, 1e-5, vs.pp("model.norm"))?;
+        let lm_head    = ZumarBitLinear::new(in_dim, vocab_size, vs.pp("lm_head"))?;
+        Ok(Self { embedding, layers, final_norm, lm_head, hidden_size: in_dim, vocab_size })
+    }
+    
 
     pub fn embed(&self, token_id: u32, device: &Device) -> Result<Tensor> {
         let input_id = Tensor::new(&[token_id], device)?;
@@ -239,6 +262,45 @@ impl ZumarModel {
 
         Ok(Self { embedding: embedding_layer, layers, final_norm, lm_head, hidden_size: in_dim, vocab_size })
     }
+    
+    pub fn add_lora(&mut self, rank: usize, alpha: f64) -> Result<()> {
+        for (i, layer) in self.layers.iter_mut().enumerate() {
+            let vs_empty = candle_nn::VarBuilder::zeros(DType::F32, &Device::Cpu);
+            layer.lora_q = Some(crate::layers::lora::apply_lora_to_bitlinear(
+                &layer.q_proj, rank, alpha, vs_empty.pp(format!("layer_{}_q", i)),
+            )?);
+            layer.lora_v = Some(crate::layers::lora::apply_lora_to_bitlinear(
+                &layer.v_proj, rank, alpha, vs_empty.pp(format!("layer_{}_v", i)),
+            )?);
+        }
+        Ok(())
+    }
+      /// تفعيل QLoRA: تكميم + LoRA
+    pub fn add_qlora(&mut self, rank: usize, alpha: f64) -> Result<()> {
+      println!("   🧬 Quantizing model to NF4...");
+      for layer in &mut self.layers {
+          layer.q_proj.quantize_to_nf4()?;
+          layer.v_proj.quantize_to_nf4()?;
+          layer.o_proj.quantize_to_nf4()?;
+      }
+      
+      println!("   🧬 Adding LoRA adapters...");
+      let varmap = candle_nn::VarMap::new();
+      // let vs = candle_nn::VarBuilder::from_varmap(&varmap, DType::F32, &Device::Cpu);
+      let vs = candle_nn::VarBuilder::from_varmap(&varmap, DType::F32, &self.layers[0].q_proj.latent_weight.device());
+      
+      for (i, layer) in self.layers.iter_mut().enumerate() {
+          layer.lora_q = Some(crate::layers::lora::apply_qlora_to_bitlinear(
+              &layer.q_proj, rank, alpha, vs.pp(format!("layer_{}_q", i)),
+          )?);
+          layer.lora_v = Some(crate::layers::lora::apply_qlora_to_bitlinear(
+              &layer.v_proj, rank, alpha, vs.pp(format!("layer_{}_v", i)),
+          )?);
+      }
+      
+      Ok(())
+  }
+  
 }
 
 /// ✅ إصلاح: فك الضغط إلى F32 مباشرة (كان F16 → dtype mismatch مع بقية النموذج)

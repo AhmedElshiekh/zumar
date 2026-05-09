@@ -105,3 +105,26 @@ pub fn apply_lora_to_bitlinear(
         vs,
     )
 }
+
+/// تطبيق LoRA على طبقة مكممة (QLoRA)
+pub fn apply_qlora_to_bitlinear(
+    bitlinear: &crate::layers::bitlinear::ZumarBitLinear,
+    rank: usize,
+    alpha: f64,
+    vs: VarBuilder,
+) -> Result<LoRALinear> {
+    // فك التكميم أولاً للحصول على الوزن الأصلي
+    let weight = if bitlinear.quantize {
+        bitlinear.dequantize_from_nf4()?
+    } else {
+        bitlinear.latent_weight.clone()
+    };
+    
+    LoRALinear::new(
+        weight,
+        bitlinear.bias.clone(),
+        rank,
+        alpha,
+        vs,
+    )
+}

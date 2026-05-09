@@ -91,33 +91,40 @@ impl VocabAlignment {
     pub fn kl_divergence(
         &self,
         teacher_logits: &[f32],
-        student_logits: &Tensor,
-        temperature:     f32,
-        device:          &Device,
+        student_logits: &Tensor,  // يجب أن يبقى Tensor
+        temperature: f32,
+        device: &Device,
     ) -> Result<Tensor> {
-        let t_proj = self.project_teacher(teacher_logits);
-        let s_proj = self.project_student(student_logits)?;
-
-        if t_proj.is_empty() || s_proj.is_empty() {
-            return Tensor::new(&[0.0f32], device);
+        if self.teacher_ids.is_empty() {
+            return Tensor::zeros((), candle_core::DType::F32, device);
         }
-
-        let t_probs = Self::softmax_projected(&t_proj, temperature);
-        let s_probs = Self::softmax_projected(&s_proj, temperature);
-
-        // KL(T || S) = Σ T * log(T / S)
-        let kl: f32 = t_probs.iter().zip(s_probs.iter())
-            .map(|(&t, &s)| {
-                if t < 1e-9 { return 0.0; }
-                let s_safe = s.max(1e-9);
-                t * (t / s_safe).ln()
+    
+        let temp = temperature as f64;
+    
+        // ── Teacher: Vec → Tensor (لا graph مطلوب) ──
+        let t_proj: Vec<f32> = self.teacher_ids.iter()
+            .map(|&id| {
+                let idx = id as usize;
+                if idx < teacher_logits.len() { teacher_logits[idx] } else { f32::NEG_INFINITY }
             })
-            .sum();
-
-        // Temperature scaling: T² لأن logits مقسومة على T
-        let scaled = kl * temperature * temperature;
-
-        Tensor::new(&[scaled], device)
+            .collect();
+        let t_tensor = Tensor::from_vec(t_proj, self.teacher_ids.len(), device)?;
+        let t_probs  = candle_nn::ops::softmax(&(&t_tensor / temp)?, 0)?;
+    
+        // ── Student: index_select يحافظ على graph ──
+        let s_ids    = Tensor::new(self.student_ids.as_slice(), device)?;
+        let s_proj   = student_logits.index_select(&s_ids, 0)?;
+        let s_probs  = candle_nn::ops::softmax(&(&s_proj / temp)?, 0)?;
+    
+        // ── KL بعمليات Tensor كاملة ──
+        // KL(T||S) = Σ T * log(T/S) = Σ T * (log T - log S)
+        let eps     = 1e-9f64;
+        let log_t   = (t_probs.clone() + eps)?.log()?;
+        let log_s   = (s_probs.clone() + eps)?.log()?;
+        let kl      = (&t_probs * (&log_t - &log_s)?)?.sum_all()?;
+    
+        // Temperature scaling T²
+        (kl * (temp * temp))?.reshape(&[1])
     }
 }
 

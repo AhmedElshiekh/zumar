@@ -26,3 +26,12 @@ serde_json = "1.0"
 tokenizers = "0.19.0" 
 intel-mkl-src = { version = "0.8.1" }
 openblas-src = { version = "0.10", features = ["static"] }
+
+
+
+[profile.release]
+opt-level = "z"     # تحسين الحجم
+lto = true          # Link Time Optimization
+codegen-units = 1   # تحسين أفضل
+strip = true        # إزالة debug info
+panic = "abort"     # تقليل حجم binary

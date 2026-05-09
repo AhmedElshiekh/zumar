@@ -51,40 +51,34 @@ impl EWC {
     /// تقريب عملي: متوسط مربع الـ gradients على عينة من البيانات
     pub fn compute_fisher(
         &self,
-        varmap:   &VarMap,
-        losses:   &[Tensor],   // عينة من الـ losses المحسوبة
-        _device:   &Device,
+        varmap: &VarMap,
+        losses: &[Tensor],
+        _device: &Device,
     ) -> Result<HashMap<String, Vec<f32>>> {
-        let vars     = varmap.all_vars();
+        let vars = varmap.all_vars();
         let mut fisher: HashMap<String, Vec<f32>> = HashMap::new();
-
-        // تهيئة Fisher بأصفار
-        for var in &vars {
-            let name  = format!("{:p}", var.as_tensor());
-            let shape = var.as_tensor().dims().to_vec();
-            let total: usize = shape.iter().product();
-            fisher.insert(name, vec![0.0f32; total]);
+    
+        // إذا لا توجد خسائر، أرجع فارغ
+        if losses.is_empty() {
+            return Ok(fisher);
         }
-
-        // تراكم مربع الـ gradients
-        let n = losses.len().max(1) as f32;
-        for loss in losses {
-            // backward pass
-            let grads = loss.backward()?;
-
-            for var in &vars {
-                let name = format!("{:p}", var.as_tensor());
-                if let Some(grad) = grads.get(var.as_tensor()) {
-                    let grad_vals = grad.flatten_all()?.to_vec1::<f32>()?;
-                    if let Some(f) = fisher.get_mut(&name) {
-                        for (fi, gi) in f.iter_mut().zip(grad_vals.iter()) {
-                            *fi += (gi * gi) / n;  // مربع الـ gradient
-                        }
-                    }
-                }
+    
+        // استخدام خسارة واحدة فقط لتقليل الذاكرة
+        let loss = &losses[0];
+        
+        // backward مرة واحدة فقط
+        let grads = loss.backward()?;
+    
+        for var in &vars {
+            let name = format!("{:p}", var.as_tensor());
+            if let Some(grad) = grads.get(var.as_tensor()) {
+                let grad_vals = grad.flatten_all()?.to_vec1::<f32>()?;
+                // Fisher = grad² (بسيط وسريع)
+                let fisher_vals: Vec<f32> = grad_vals.iter().map(|g| g * g).collect();
+                fisher.insert(name, fisher_vals);
             }
         }
-
+    
         Ok(fisher)
     }
 
@@ -230,7 +224,7 @@ impl EWC {
                 acc.and_then(|a| &a + p)
             })?;
 
-        total * self.lambda as f64
+        (total * self.lambda as f64)?.reshape(&[1])
     }
 
     // ════════════════════════════════════════════════════════

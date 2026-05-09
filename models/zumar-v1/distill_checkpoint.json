@@ -1,11 +1,12 @@
 {
-  "teacher_index": 1,
+  "teacher_index": 2,
   "teacher_name": "",
   "epoch": 0,
-  "total_epochs": 0,
-  "best_loss": null,
+  "total_epochs": 700,
+  "best_loss": 0.0,
   "current_lr": 0.001,
   "done_teachers": [
+    "llama",
     "gpt2"
   ]
 }
