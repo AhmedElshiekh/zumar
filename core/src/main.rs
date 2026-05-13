@@ -52,8 +52,8 @@ async fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().collect();
     let mode = args.get(1).map(|s| s.as_str()).unwrap_or("chat");
     
-    let hidden_size: usize = 1024;
-    let num_layers: usize = 12;
+    let hidden_size: usize = 512;
+    let num_layers: usize = 16;
     let n_heads: usize = 16;   // بدلاً من 16
     let kv_heads: usize = 4;  // جديد: رأس واحد لـ K و V
     let vocab_size: usize = 50257;

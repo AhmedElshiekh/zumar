@@ -1,3 +1,4 @@
+[1m[92m   Compiling[0m core v2.2.0 (/root/projects/zumar/core)
 [1m[33mwarning[0m[1m: unused imports: `DType` and `Device`[0m
  [1m[94m--> [0mcore/src/layers/lora.rs:1:35
   [1m[94m|[0m
@@ -455,16 +456,16 @@
     [1m[94m|[0m         [1m[33m^^^^^^^^^^[0m
 
 [1m[33mwarning[0m[1m: method `get_config` is never used[0m
-   [1m[94m--> [0mcore/src/true_distill.rs:436:12
+   [1m[94m--> [0mcore/src/true_distill.rs:441:12
     [1m[94m|[0m
-[1m[94m417[0m [1m[94m|[0m impl AutoTeacher {
+[1m[94m422[0m [1m[94m|[0m impl AutoTeacher {
     [1m[94m|[0m [1m[94m----------------[0m [1m[94mmethod in this implementation[0m
 [1m[94m...[0m
-[1m[94m436[0m [1m[94m|[0m     pub fn get_config(&self) -> &TeacherC[1m[94m...[0m
+[1m[94m441[0m [1m[94m|[0m     pub fn get_config(&self) -> &TeacherC[1m[94m...[0m
     [1m[94m|[0m            [1m[33m^^^^^^^^^^[0m
 
 [1m[33mwarning[0m: `core` (bin "core") generated 46 warnings (run `cargo fix --bin "core" -p core` to apply 8 suggestions)
-[1m[92m    Finished[0m `release` profile [optimized] target(s) in 9.59s
+[1m[92m    Finished[0m `release` profile [optimized] target(s) in 2m 01s
 [1m[92m     Running[0m `/tmp/cargo_target/release/core distill 1 /data`
 [1;35m
 
@@ -524,20 +525,51 @@ Usage:
    📊 gpt2: 768d 6L vocab=50257 tensors=82 tokenizer=✅
    🧬 Attempting: model.safetensors
    ⚠️  SKIPPING model.safetensors (1124 MB) - too large for device memory
-   ♻️  EWC loaded — 1 teacher(s) consolidated: ["llama"]
+   ♻️  EWC loaded — 4 teacher(s) consolidated: ["llama", "gpt2"]
 
 ════════════════════════════════════════════════════════════
 🧬 MULTI-TEACHER DISTILLATION (Hybrid Cache + Causal + Embedding)
    Teachers: 2  |  Samples: 50
-   Resume:   teacher=1 epoch=0
+   Resume:   teacher=4 epoch=0
 
    📐 EWC Status:
-     Teachers consolidated: 1
+     Teachers consolidated: 4
      Lambda:                400
-     Recommended LR decay:  0.7000
+     Recommended LR decay:  0.2401
 ════════════════════════════════════════════════════════════
 
-   ⏭️  Skipping 'llama' (already done)
+   🔄 Resuming 'llama' for more epochs (0 → 1)
+
+════════════════════════════════════════════════════════════
+🧬 Teacher 1/2: llama
+   Shared: 24930 tokens | Teacher coverage: 50.7% | Student coverage: 49.6% | Weight: 0.712
+════════════════════════════════════════════════════════════
+
+🧠 DISTILLATION: llama
+   Epochs:  0 → 1
+   LR:      2.40e-3
+   Temp:    1
+   EWC λ:   400
+   Overlap: 24930 tokens
+🟡 Logits Cache MISS — computing...
+   ⚠️  Causal Attention failed — fallback to Embeddings
+🔬 Teacher logits (hybrid): sum=2414031.0000 max=1004.2006 len=49152
+🔬 Student logits: sum=18060.9258 max=1.7750 len=50257
+🟢 Logits Cache HIT (using cached logits)
+   💾 EWC state saved → models/zumar-v1/ewc_state.json
+  Ep    1/1: KL=0.000000  0 tok/s
+
+   📐 Computing Fisher for 'llama'...
+
+   📐 Computing Fisher Information for 'llama'...
+   ✅ Fisher updated — 5 teacher(s) consolidated
+   💾 EWC state saved → models/zumar-v1/ewc_state.json
+   📊 Cache: 281 hits / 69 misses (80% hit)
+   📊 Causal: 0 OK / 69 fallback
+
+⏱ Total: 1156.0s
+
+   🔄 Resuming 'gpt2' for more epochs (0 → 1)
 
 ════════════════════════════════════════════════════════════
 🧬 Teacher 2/2: gpt2
@@ -546,27 +578,24 @@ Usage:
 
 🧠 DISTILLATION: gpt2
    Epochs:  0 → 1
-   LR:      7.00e-3
+   LR:      1.68e-3
    Temp:    1
    EWC λ:   400
    Overlap: 32841 tokens
-🟡 Logits Cache MISS — computing...
-   ⚠️  Causal Attention failed — fallback to Embeddings
 🔬 Teacher logits (hybrid): sum=125270.9844 max=9.5993 len=50257
-🔬 Student logits: sum=25747.8652 max=2.5812 len=50257
-🟢 Logits Cache HIT (using cached logits)
+🔬 Student logits: sum=18077.8320 max=10.7996 len=50257
    💾 EWC state saved → models/zumar-v1/ewc_state.json
-  Ep    1/1: KL=0.0000  0 tok/s
+  Ep    1/1: KL=0.000000  0 tok/s
 
    📐 Computing Fisher for 'gpt2'...
 
    📐 Computing Fisher Information for 'gpt2'...
-   ✅ Fisher updated — 2 teacher(s) consolidated
+   ✅ Fisher updated — 6 teacher(s) consolidated
    💾 EWC state saved → models/zumar-v1/ewc_state.json
-   📊 Cache: 281 hits / 69 misses (80% hit)
-   📊 Causal: 0 OK / 69 fallback
+   📊 Cache: 562 hits / 138 misses (80% hit)
+   📊 Causal: 0 OK / 138 fallback
 
-⏱ Total: 2447.0s
+⏱ Total: 1257.8s
 
 🎉 ALL TEACHERS DONE!
 
@@ -575,9 +604,9 @@ Usage:
 
 ╔══════════════════════════════════════╗
 ║  📦 EXPORT COMPLETE                  ║
-║  Original:     783.1 MB               ║
-║  .zmr:          48.9 MB               ║
-║  .gguf:         49.0 MB               ║
+║  Original:     326.7 MB               ║
+║  .zmr:          20.4 MB               ║
+║  .gguf:         20.5 MB               ║
 ║  Ratio:         16.0x smaller         ║
 ╚══════════════════════════════════════╝
 

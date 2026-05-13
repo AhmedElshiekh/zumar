@@ -163,9 +163,14 @@ impl TrueDistiller {
 
         for (idx, (teacher, alignment)) in teachers.iter().enumerate() {
             let name = &teacher.config.arch_type;
-            if checkpoint.is_teacher_done(name) {
-                println!("\n   ⏭️  Skipping '{}' (already done)", name);
+            if checkpoint.is_teacher_done(name) && checkpoint.epoch >= self.config.epochs {
+                println!("\n   ⏭️  Skipping '{}' (already done with max epochs)", name);
                 continue;
+            }
+            if checkpoint.is_teacher_done(name) && checkpoint.epoch < self.config.epochs {
+                println!("\n   🔄 Resuming '{}' for more epochs ({} → {})", 
+                    name, checkpoint.epoch, self.config.epochs);
+                // نسمح بالمرور للأسفل لبدء التدريب من حيث توقف
             }
             if idx > checkpoint.teacher_index { checkpoint.epoch = 0; }
 
@@ -341,7 +346,7 @@ impl TrueDistiller {
             }
 
             let tps = total_tokens as f64 / start.elapsed().as_secs_f64().max(0.1);
-            println!("  Ep {:>4}/{}: KL={:.4}  {:.0} tok/s", epoch + 1, self.config.epochs, avg_loss, tps);
+            println!("  Ep {:>4}/{}: KL={:.8}  {:.0} tok/s", epoch + 1, self.config.epochs, avg_loss, tps);
         }
 
         // Fisher
