@@ -1,8 +1,8 @@
 {
-  "teacher_index": 6,
+  "teacher_index": 16,
   "teacher_name": "",
   "epoch": 0,
-  "total_epochs": 2100,
+  "total_epochs": 8750,
   "best_loss": 0.0,
   "current_lr": 0.001,
   "done_teachers": [
@@ -11,6 +11,16 @@
     "llama",
     "gpt2",
     "llama",
-    "gpt2"
+    "gpt2",
+    "other",
+    "other",
+    "other",
+    "distilgpt2",
+    "other",
+    "distilgpt2",
+    "other",
+    "distilgpt2",
+    "other",
+    "distilgpt2"
   ]
 }

@@ -91,40 +91,68 @@ impl VocabAlignment {
     pub fn kl_divergence(
         &self,
         teacher_logits: &[f32],
-        student_logits: &Tensor,  // يجب أن يبقى Tensor
+        student_logits: &Tensor,
         temperature: f32,
         device: &Device,
     ) -> Result<Tensor> {
         if self.teacher_ids.is_empty() {
-            return Tensor::zeros((), candle_core::DType::F32, device);
+            return Ok(Tensor::zeros((), candle_core::DType::F32, device)?);
         }
     
         let temp = temperature as f64;
+        let eps = 1e-9f64;
     
-        // ── Teacher: Vec → Tensor (لا graph مطلوب) ──
-        let t_proj: Vec<f32> = self.teacher_ids.iter()
+        // Teacher projection
+        let t_proj: Vec<f32> = self.teacher_ids
+            .iter()
             .map(|&id| {
                 let idx = id as usize;
-                if idx < teacher_logits.len() { teacher_logits[idx] } else { f32::NEG_INFINITY }
+                if idx < teacher_logits.len() {
+                    teacher_logits[idx]
+                } else {
+                    f32::NEG_INFINITY
+                }
             })
             .collect();
+    
+        let t_sample_for_diag = t_proj.iter().take(10).copied().collect::<Vec<f32>>();
+    
         let t_tensor = Tensor::from_vec(t_proj, self.teacher_ids.len(), device)?;
-        let t_probs  = candle_nn::ops::softmax(&(&t_tensor / temp)?, 0)?;
+        let t_probs = candle_nn::ops::softmax(&(&t_tensor / temp)?, 0)?;
     
-        // ── Student: index_select يحافظ على graph ──
-        let s_ids    = Tensor::new(self.student_ids.as_slice(), device)?;
-        let s_proj   = student_logits.index_select(&s_ids, 0)?;
-        let s_probs  = candle_nn::ops::softmax(&(&s_proj / temp)?, 0)?;
+        // Student projection
+        let s_ids = Tensor::new(self.student_ids.as_slice(), device)?;
+        let s_proj = student_logits.index_select(&s_ids, 0)?;
+        let s_probs = candle_nn::ops::softmax(&(&s_proj / temp)?, 0)?;
     
-        // ── KL بعمليات Tensor كاملة ──
-        // KL(T||S) = Σ T * log(T/S) = Σ T * (log T - log S)
-        let eps     = 1e-9f64;
-        let log_t   = (t_probs.clone() + eps)?.log()?;
-        let log_s   = (s_probs.clone() + eps)?.log()?;
-        let kl      = (&t_probs * (&log_t - &log_s)?)?.sum_all()?;
+        // Diagnostic once
+        use std::sync::atomic::{AtomicBool, Ordering};
+        static FIRST: AtomicBool = AtomicBool::new(true);
+        if FIRST.swap(false, Ordering::Relaxed) {
+            let t_sum = t_probs.sum_all()?.to_scalar::<f32>()?;
+            let s_sum = s_probs.sum_all()?.to_scalar::<f32>()?;
+            let t_max = t_probs.max(0)?.to_scalar::<f32>()?;
+            let s_max = s_probs.max(0)?.to_scalar::<f32>()?;
+            eprintln!("🔍 KL diag: t_probs sum={:.6}, s_probs sum={:.6}", t_sum, s_sum);
+            eprintln!("🔍 KL diag: t_probs max={:.6}, s_probs max={:.6}", t_max, s_max);
+            eprintln!("🔍 First 10 teacher projected: {:?}", t_sample_for_diag);
+            let s_sample = s_proj.to_vec1::<f32>()?.iter().take(10).copied().collect::<Vec<f32>>();
+            eprintln!("🔍 First 10 student projected: {:?}", s_sample);
+        }
     
-        // Temperature scaling T²
-        (kl * (temp * temp))?.reshape(&[1])
+        // KL divergence
+        let log_t = (t_probs.clone() + eps)?.log()?;
+        let log_s = (s_probs.clone() + eps)?.log()?;
+        let kl = (&t_probs * (&log_t - &log_s)?)?.sum_all()?;
+        let kl_scaled = (kl * (temp * temp))?.reshape(&[])?;  // ← هنا الحل
+    
+        let kl_val = kl_scaled.to_scalar::<f32>()?;
+        if kl_val.is_nan() || kl_val.is_infinite() {
+            eprintln!("⚠️ KL returned NaN/Inf, returning zero tensor");
+            return Ok(Tensor::zeros((), candle_core::DType::F32, device)?);
+        }
+    
+        Ok(kl_scaled)
     }
 }
 

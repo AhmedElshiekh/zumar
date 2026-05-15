@@ -51,6 +51,12 @@
 [1m[94m192[0m [1m[94m|[0m [1m[94m...[0mrank: usize, alpha: f64,
     [1m[94m|[0m                 [1m[33m^^^^^[0m [1m[33mhelp: if this is intentional, prefix it with an underscore: `_alpha`[0m
 
+[1m[33mwarning[0m[1m: unused variable: `hash`[0m
+   [1m[94m--> [0mcore/src/true_distill.rs:226:26
+    [1m[94m|[0m
+[1m[94m226[0m [1m[94m|[0m [1m[94m...[0m        for (hash, logits) in c.iter()[1m[94m...[0m
+    [1m[94m|[0m                 [1m[33m^^^^[0m [1m[33mhelp: if this is intentional, prefix it with an underscore: `_hash`[0m
+
 [1m[33mwarning[0m[1m: unused variable: `kv_heads`[0m
   [1m[94m--> [0mcore/src/main.rs:58:9
    [1m[94m|[0m
@@ -58,14 +64,56 @@
    [1m[94m|[0m         [1m[33m^^^^^^^^[0m [1m[33mhelp: if this is intentional, prefix it with an underscore: `_kv_heads`[0m
 
 [1m[33mwarning[0m[1m: variable does not need to be mutable[0m
-   [1m[94m--> [0mcore/src/main.rs:257:9
+   [1m[94m--> [0mcore/src/main.rs:263:9
     [1m[94m|[0m
-[1m[94m257[0m [1m[94m|[0m     let mut model = ZumarModel::new_qlora(
+[1m[94m263[0m [1m[94m|[0m     let mut model = ZumarModel::new_qlora(
     [1m[94m|[0m         [1m[94m----[0m[1m[33m^^^^^[0m
     [1m[94m|[0m         [1m[94m|[0m
     [1m[94m|[0m         [1m[94mhelp: remove this `mut`[0m
     [1m[94m|[0m
     [1m[94m= [0m[1mnote[0m: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+[1m[33mwarning[0m[1m: unused variable: `vocab_size`[0m
+   [1m[94m--> [0mcore/src/main.rs:580:5
+    [1m[94m|[0m
+[1m[94m580[0m [1m[94m|[0m     vocab_size: usize,      // حجم الطالب[1m[94m...[0m
+    [1m[94m|[0m     [1m[33m^^^^^^^^^^[0m [1m[33mhelp: if this is intentional, prefix it with an underscore: `_vocab_size`[0m
+
+[1m[33mwarning[0m[1m: unused variable: `hidden_size`[0m
+   [1m[94m--> [0mcore/src/main.rs:581:5
+    [1m[94m|[0m
+[1m[94m581[0m [1m[94m|[0m     hidden_size: usize,
+    [1m[94m|[0m     [1m[33m^^^^^^^^^^^[0m [1m[33mhelp: if this is intentional, prefix it with an underscore: `_hidden_size`[0m
+
+[1m[33mwarning[0m[1m: unused variable: `num_layers`[0m
+   [1m[94m--> [0mcore/src/main.rs:582:5
+    [1m[94m|[0m
+[1m[94m582[0m [1m[94m|[0m     num_layers: usize,
+    [1m[94m|[0m     [1m[33m^^^^^^^^^^[0m [1m[33mhelp: if this is intentional, prefix it with an underscore: `_num_layers`[0m
+
+[1m[33mwarning[0m[1m: unused variable: `num_experts`[0m
+   [1m[94m--> [0mcore/src/main.rs:583:5
+    [1m[94m|[0m
+[1m[94m583[0m [1m[94m|[0m     num_experts: usize,
+    [1m[94m|[0m     [1m[33m^^^^^^^^^^^[0m [1m[33mhelp: if this is intentional, prefix it with an underscore: `_num_experts`[0m
+
+[1m[33mwarning[0m[1m: unused variable: `top_k`[0m
+   [1m[94m--> [0mcore/src/main.rs:584:5
+    [1m[94m|[0m
+[1m[94m584[0m [1m[94m|[0m     top_k: usize,
+    [1m[94m|[0m     [1m[33m^^^^^[0m [1m[33mhelp: if this is intentional, prefix it with an underscore: `_top_k`[0m
+
+[1m[33mwarning[0m[1m: unused variable: `n_heads`[0m
+   [1m[94m--> [0mcore/src/main.rs:585:5
+    [1m[94m|[0m
+[1m[94m585[0m [1m[94m|[0m     n_heads: usize,
+    [1m[94m|[0m     [1m[33m^^^^^^^[0m [1m[33mhelp: if this is intentional, prefix it with an underscore: `_n_heads`[0m
+
+[1m[33mwarning[0m[1m: unused variable: `tokenizer`[0m
+   [1m[94m--> [0mcore/src/main.rs:608:9
+    [1m[94m|[0m
+[1m[94m608[0m [1m[94m|[0m     let tokenizer = match ZumarTokenizer:[1m[94m...[0m
+    [1m[94m|[0m         [1m[33m^^^^^^^^^[0m [1m[33mhelp: if this is intentional, prefix it with an underscore: `_tokenizer`[0m
 
 [1m[33mwarning[0m[1m: fields `lora_q` and `lora_v` are never read[0m
   [1m[94m--> [0mcore/src/layers/mod.rs:27:9
@@ -198,40 +246,40 @@
    [1m[94m|[0m            [1m[33m^^^^^^^^^^^^^^^^^[0m
 
 [1m[33mwarning[0m[1m: associated functions `new` and `extract_teacher_vocab_from_safetensors` are never used[0m
-   [1m[94m--> [0mcore/src/layers/vocab_aligner.rs:143:12
+   [1m[94m--> [0mcore/src/layers/vocab_aligner.rs:171:12
     [1m[94m|[0m
-[1m[94m142[0m [1m[94m|[0m impl VocabAligner {
+[1m[94m170[0m [1m[94m|[0m impl VocabAligner {
     [1m[94m|[0m [1m[94m-----------------[0m [1m[94massociated functions in this implementation[0m
-[1m[94m143[0m [1m[94m|[0m     pub fn new(student_vocab: HashMap<String, u32>, [1m[94m...[0m
+[1m[94m171[0m [1m[94m|[0m     pub fn new(student_vocab: HashMap<String, u32>, [1m[94m...[0m
     [1m[94m|[0m            [1m[33m^^^[0m
 [1m[94m...[0m
-[1m[94m248[0m [1m[94m|[0m     pub fn extract_teacher_vocab_from_safetensors(pa[1m[94m...[0m
+[1m[94m276[0m [1m[94m|[0m     pub fn extract_teacher_vocab_from_safetensors(pa[1m[94m...[0m
     [1m[94m|[0m            [1m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
 
 [1m[33mwarning[0m[1m: struct `MultiTeacherAlignment` is never constructed[0m
-   [1m[94m--> [0mcore/src/layers/vocab_aligner.rs:310:12
+   [1m[94m--> [0mcore/src/layers/vocab_aligner.rs:338:12
     [1m[94m|[0m
-[1m[94m310[0m [1m[94m|[0m pub struct MultiTeacherAlignment {
+[1m[94m338[0m [1m[94m|[0m pub struct MultiTeacherAlignment {
     [1m[94m|[0m            [1m[33m^^^^^^^^^^^^^^^^^^^^^[0m
 
 [1m[33mwarning[0m[1m: associated items `new`, `add`, `normalized_weight`, `ensemble_kl`, and `report` are never used[0m
-   [1m[94m--> [0mcore/src/layers/vocab_aligner.rs:316:12
+   [1m[94m--> [0mcore/src/layers/vocab_aligner.rs:344:12
     [1m[94m|[0m
-[1m[94m315[0m [1m[94m|[0m impl MultiTeacherAlignment {
+[1m[94m343[0m [1m[94m|[0m impl MultiTeacherAlignment {
     [1m[94m|[0m [1m[94m--------------------------[0m [1m[94massociated items in this implementation[0m
-[1m[94m316[0m [1m[94m|[0m     pub fn new() -> Self {
+[1m[94m344[0m [1m[94m|[0m     pub fn new() -> Self {
     [1m[94m|[0m            [1m[33m^^^[0m
 [1m[94m...[0m
-[1m[94m320[0m [1m[94m|[0m     pub fn add(&mut self, name: String, a[1m[94m...[0m
+[1m[94m348[0m [1m[94m|[0m     pub fn add(&mut self, name: String, a[1m[94m...[0m
     [1m[94m|[0m            [1m[33m^^^[0m
 [1m[94m...[0m
-[1m[94m326[0m [1m[94m|[0m     pub fn normalized_weight(&self, idx: [1m[94m...[0m
+[1m[94m354[0m [1m[94m|[0m     pub fn normalized_weight(&self, idx: [1m[94m...[0m
     [1m[94m|[0m            [1m[33m^^^^^^^^^^^^^^^^^[0m
 [1m[94m...[0m
-[1m[94m332[0m [1m[94m|[0m     pub fn ensemble_kl(
+[1m[94m360[0m [1m[94m|[0m     pub fn ensemble_kl(
     [1m[94m|[0m            [1m[33m^^^^^^^^^^^[0m
 [1m[94m...[0m
-[1m[94m366[0m [1m[94m|[0m     pub fn report(&self) {
+[1m[94m394[0m [1m[94m|[0m     pub fn report(&self) {
     [1m[94m|[0m            [1m[33m^^^^^^[0m
 
 [1m[33mwarning[0m[1m: fields `fisher` and `optimal_weights` are never read[0m
@@ -445,27 +493,27 @@
     [1m[94m|[0m            [1m[33m^^^^^^^^^^^^[0m
 
 [1m[33mwarning[0m[1m: fields `lora_rank` and `lora_alpha` are never read[0m
-   [1m[94m--> [0mcore/src/true_distill.rs:114:9
+   [1m[94m--> [0mcore/src/true_distill.rs:108:9
     [1m[94m|[0m
-[1m[94m107[0m [1m[94m|[0m pub struct DistillConfig {
+[1m[94m101[0m [1m[94m|[0m pub struct DistillConfig {
     [1m[94m|[0m            [1m[94m-------------[0m [1m[94mfields in this struct[0m
 [1m[94m...[0m
-[1m[94m114[0m [1m[94m|[0m     pub lora_rank: usize,
+[1m[94m108[0m [1m[94m|[0m     pub lora_rank: usize,
     [1m[94m|[0m         [1m[33m^^^^^^^^^[0m
-[1m[94m115[0m [1m[94m|[0m     pub lora_alpha: f64,
+[1m[94m109[0m [1m[94m|[0m     pub lora_alpha: f64,
     [1m[94m|[0m         [1m[33m^^^^^^^^^^[0m
 
 [1m[33mwarning[0m[1m: method `get_config` is never used[0m
-   [1m[94m--> [0mcore/src/true_distill.rs:441:12
+   [1m[94m--> [0mcore/src/true_distill.rs:466:12
     [1m[94m|[0m
-[1m[94m422[0m [1m[94m|[0m impl AutoTeacher {
+[1m[94m447[0m [1m[94m|[0m impl AutoTeacher {
     [1m[94m|[0m [1m[94m----------------[0m [1m[94mmethod in this implementation[0m
 [1m[94m...[0m
-[1m[94m441[0m [1m[94m|[0m     pub fn get_config(&self) -> &TeacherC[1m[94m...[0m
+[1m[94m466[0m [1m[94m|[0m     pub fn get_config(&self) -> &TeacherC[1m[94m...[0m
     [1m[94m|[0m            [1m[33m^^^^^^^^^^[0m
 
-[1m[33mwarning[0m: `core` (bin "core") generated 46 warnings (run `cargo fix --bin "core" -p core` to apply 8 suggestions)
-[1m[92m    Finished[0m `release` profile [optimized] target(s) in 2m 01s
+[1m[33mwarning[0m: `core` (bin "core") generated 54 warnings (run `cargo fix --bin "core" -p core` to apply 16 suggestions)
+[1m[92m    Finished[0m `release` profile [optimized] target(s) in 1m 50s
 [1m[92m     Running[0m `/tmp/cargo_target/release/core distill 1 /data`
 [1;35m
 
@@ -517,85 +565,88 @@ Usage:
    🔗 distilgpt2 alignment: 32841 shared tokens (65.3% teacher, 65.3% student)
    📚 'bitnet-b1.58': 87780 tokens in teacher vocab
    🔗 bitnet-b1.58 alignment: 28349 shared tokens (22.1% teacher, 56.4% student)
-   🧬 Attempting: model.safetensors
+   🧬 Attempting: other
    📖 Loading: models/teacher/other/model.safetensors
    📊 llama: 576d 30L vocab=49152 tensors=272 tokenizer=✅
-   🧬 Attempting: model.safetensors
+   🧬 Attempting: distilgpt2
    📖 Loading: models/teacher/distilgpt2/model.safetensors
    📊 gpt2: 768d 6L vocab=50257 tensors=82 tokenizer=✅
-   🧬 Attempting: model.safetensors
-   ⚠️  SKIPPING model.safetensors (1124 MB) - too large for device memory
-   ♻️  EWC loaded — 4 teacher(s) consolidated: ["llama", "gpt2"]
+   🧬 Attempting: bitnet-b1.58
+   ⚠️  SKIPPING bitnet-b1.58 (1124 MB) - too large for device memory
+   ♻️  EWC loaded — 14 teacher(s) consolidated: ["other", "distilgpt2"]
 
 ════════════════════════════════════════════════════════════
 🧬 MULTI-TEACHER DISTILLATION (Hybrid Cache + Causal + Embedding)
    Teachers: 2  |  Samples: 50
-   Resume:   teacher=4 epoch=0
+   Resume:   teacher=14 epoch=0
 
    📐 EWC Status:
-     Teachers consolidated: 4
+     Teachers consolidated: 14
      Lambda:                400
-     Recommended LR decay:  0.2401
+     Recommended LR decay:  0.0068
 ════════════════════════════════════════════════════════════
 
-   🔄 Resuming 'llama' for more epochs (0 → 1)
+   🔄 Resuming 'other' for more epochs (0 → 1)
 
 ════════════════════════════════════════════════════════════
-🧬 Teacher 1/2: llama
+🧬 Teacher 1/2: other
    Shared: 24930 tokens | Teacher coverage: 50.7% | Student coverage: 49.6% | Weight: 0.712
 ════════════════════════════════════════════════════════════
 
-🧠 DISTILLATION: llama
+🧠 DISTILLATION: other
    Epochs:  0 → 1
-   LR:      2.40e-3
+   LR:      6.78e-5
    Temp:    1
    EWC λ:   400
    Overlap: 24930 tokens
-🟡 Logits Cache MISS — computing...
-   ⚠️  Causal Attention failed — fallback to Embeddings
-🔬 Teacher logits (hybrid): sum=2414031.0000 max=1004.2006 len=49152
-🔬 Student logits: sum=18060.9258 max=1.7750 len=50257
-🟢 Logits Cache HIT (using cached logits)
+   📂 Offline mode: using models/zlog/other.zlog
+   ✅ Loaded 10 entries (vocab=49152)
+   🔍 Sample logits: sum=1337628.1250, non-zero=49152/49152
+🔬 Teacher logits: sum=1978148.2500 max=143.3750 len=49152
+🔬 Student logits: sum=18206.5703 max=2.0387 len=50257
+🔍 KL diag: t_probs sum=1.000000, s_probs sum=1.000000
+🔍 KL diag: t_probs max=0.797715, s_probs max=0.000263
+🔍 First 10 teacher projected: [14.8515625, 16.796875, 19.734375, 23.9375, 26.359375, 34.0625, 48.25, 51.96875, 42.71875, 47.5625]
+🔍 First 10 student projected: [1.153662, 0.466322, -0.10264465, -0.034021594, -0.21727844, -0.16428936, -0.4063216, -0.040575974, 0.31847376, -0.0088739395]
    💾 EWC state saved → models/zumar-v1/ewc_state.json
-  Ep    1/1: KL=0.000000  0 tok/s
+  Ep    1/1: KL=9.90032291  0 tok/s
 
-   📐 Computing Fisher for 'llama'...
+   📐 Computing Fisher for 'other'...
 
-   📐 Computing Fisher Information for 'llama'...
-   ✅ Fisher updated — 5 teacher(s) consolidated
+   📐 Computing Fisher Information for 'other'...
+   ✅ Fisher updated — 15 teacher(s) consolidated
    💾 EWC state saved → models/zumar-v1/ewc_state.json
-   📊 Cache: 281 hits / 69 misses (80% hit)
-   📊 Causal: 0 OK / 69 fallback
 
-⏱ Total: 1156.0s
+⏱ Total: 1096.4s
 
-   🔄 Resuming 'gpt2' for more epochs (0 → 1)
+   🔄 Resuming 'distilgpt2' for more epochs (0 → 1)
 
 ════════════════════════════════════════════════════════════
-🧬 Teacher 2/2: gpt2
+🧬 Teacher 2/2: distilgpt2
    Shared: 32841 tokens | Teacher coverage: 65.3% | Student coverage: 65.3% | Weight: 0.808
 ════════════════════════════════════════════════════════════
 
-🧠 DISTILLATION: gpt2
+🧠 DISTILLATION: distilgpt2
    Epochs:  0 → 1
-   LR:      1.68e-3
+   LR:      4.75e-5
    Temp:    1
    EWC λ:   400
    Overlap: 32841 tokens
-🔬 Teacher logits (hybrid): sum=125270.9844 max=9.5993 len=50257
-🔬 Student logits: sum=18077.8320 max=10.7996 len=50257
+   📂 Offline mode: using models/zlog/distilgpt2.zlog
+   ✅ Loaded 10 entries (vocab=50257)
+   🔍 Sample logits: sum=128723.1094, non-zero=50257/50257
+🔬 Teacher logits: sum=118223.1719 max=4.5703 len=50257
+🔬 Student logits: sum=18206.5371 max=2.0387 len=50257
    💾 EWC state saved → models/zumar-v1/ewc_state.json
-  Ep    1/1: KL=0.000000  0 tok/s
+  Ep    1/1: KL=0.14947106  0 tok/s
 
-   📐 Computing Fisher for 'gpt2'...
+   📐 Computing Fisher for 'distilgpt2'...
 
-   📐 Computing Fisher Information for 'gpt2'...
-   ✅ Fisher updated — 6 teacher(s) consolidated
+   📐 Computing Fisher Information for 'distilgpt2'...
+   ✅ Fisher updated — 16 teacher(s) consolidated
    💾 EWC state saved → models/zumar-v1/ewc_state.json
-   📊 Cache: 562 hits / 138 misses (80% hit)
-   📊 Causal: 0 OK / 138 fallback
 
-⏱ Total: 1257.8s
+⏱ Total: 1123.2s
 
 🎉 ALL TEACHERS DONE!
 

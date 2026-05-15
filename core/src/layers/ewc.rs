@@ -175,19 +175,19 @@ impl EWC {
         Tensor::new(&[total * self.lambda], device)
     }
 
-    /// نفس EWC Loss لكن كـ Tensor يدعم backward
+     /// نفس EWC Loss لكن كـ Tensor يدعم backward
     pub fn loss_differentiable(&self, varmap: &VarMap, device: &Device) -> Result<Tensor> {
         if self.cumulative_fisher.is_empty() {
-            return Tensor::new(&[0.0f32], device);
+            return Ok(Tensor::zeros((), candle_core::DType::F32, device)?);
         }
-
+    
         let vars = varmap.all_vars();
-        let mut penalties: Vec<Tensor> = Vec::new();
-
+        let mut total_loss = Tensor::zeros((), candle_core::DType::F32, device)?;
+    
         for var in &vars {
             let name  = format!("{:p}", var.as_tensor());
             let theta = var.as_tensor().flatten_all()?;
-
+    
             let fisher  = match self.cumulative_fisher.get(&name) {
                 Some(f) => f,
                 None    => continue,
@@ -196,42 +196,32 @@ impl EWC {
                 Some(o) => o,
                 None    => continue,
             };
-
+    
             if theta.dim(0)? == 0 { continue; }
-
+    
             let f_tensor = Tensor::from_vec(
                 fisher.clone(), fisher.len(), device,
             )?;
             let o_tensor = Tensor::from_vec(
                 optimal.clone(), optimal.len(), device,
             )?;
-
-            // F * (θ - θ*)²
+    
             let diff    = (&theta - &o_tensor)?;
             let penalty = (f_tensor * diff.powf(2.0)?)?
                 .sum_all()?;
-
-            penalties.push(penalty);
+    
+            total_loss = (total_loss + penalty)?;
         }
-
-        if penalties.is_empty() {
-            return Tensor::new(&[0.0f32], device);
-        }
-
-        let total = penalties.iter()
-            .skip(1)
-            .fold(Ok(penalties[0].clone()), |acc, p| {
-                acc.and_then(|a| &a + p)
-            })?;
-
-        (total * self.lambda as f64)?.reshape(&[1])
+    
+        total_loss = (total_loss * self.lambda as f64)?;
+        total_loss.reshape(&[])
     }
-
+   
     // ════════════════════════════════════════════════════════
     // Checkpoint: حفظ واستئناف
     // ════════════════════════════════════════════════════════
 
-    /// حفظ حالة EWC كاملة
+       /// حفظ حالة EWC كاملة
     pub fn save(&self, path: &str) -> Result<()> {
         // حفظ metadata فقط (بدون cumulative_fisher/optimal)
         let state = EWCState {

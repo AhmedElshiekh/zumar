@@ -56,7 +56,6 @@ impl TeacherLogitsCache {
     ) -> Result<Vec<f32>> {
         let key = Self::hash_tokens(tokens);
         
-        // ضرب cache
         if let Some(cached) = self.cache.get(&key) {
             self.hits += 1;
             if self.hits == 1 {
@@ -70,7 +69,6 @@ impl TeacherLogitsCache {
             eprintln!("🟡 Logits Cache MISS — computing...");
         }
         
-        // محاولة causal attention أولاً
         let logits = match teacher.predict_with_causal_attention(tokens) {
             Ok(l) => {
                 self.causal_successes += 1;
@@ -87,11 +85,7 @@ impl TeacherLogitsCache {
                 teacher.predict_with_embeddings(tokens)?
             }
         };
-        // تخطي causal attention لتوفير الذاكرة
-      // let logits = teacher.predict_with_embeddings(tokens)?;
-      // self.causal_failures += 1; // كلها ستحسب كـ fallback الآن
 
-        // تخزين في cache
         self.cache.insert(key, logits.clone());
         Ok(logits)
     }
@@ -147,41 +141,39 @@ impl TrueDistiller {
         &self,
         student:   &mut ZumarModel,
         varmap:    &VarMap,
-        teachers:  &[(AutoTeacher, VocabAlignment)],
+        teachers:  &[(String, AutoTeacher, VocabAlignment)], // (name, teacher, alignment)
         data:      &[String],
         tokenizer: &ZumarTokenizer,
     ) -> Result<()> {
         let mut ewc        = EWC::load(EWC_PATH, self.config.ewc_lambda)?;
         let mut checkpoint = DistillCheckpoint::load(CKPT_PATH)?;
-
+    
         println!("\n{}", "═".repeat(60));
         println!("🧬 MULTI-TEACHER DISTILLATION (Hybrid Cache + Causal + Embedding)");
         println!("   Teachers: {}  |  Samples: {}", teachers.len(), data.len());
         println!("   Resume:   teacher={} epoch={}", checkpoint.teacher_index, checkpoint.epoch);
         ewc.report();
         println!("{}", "═".repeat(60));
-
-        for (idx, (teacher, alignment)) in teachers.iter().enumerate() {
-            let name = &teacher.config.arch_type;
+    
+        for (idx, (name, teacher, alignment)) in teachers.iter().enumerate() {
             if checkpoint.is_teacher_done(name) && checkpoint.epoch >= self.config.epochs {
                 println!("\n   ⏭️  Skipping '{}' (already done with max epochs)", name);
                 continue;
             }
             if checkpoint.is_teacher_done(name) && checkpoint.epoch < self.config.epochs {
-                println!("\n   🔄 Resuming '{}' for more epochs ({} → {})", 
+                println!("\n   🔄 Resuming '{}' for more epochs ({} → {})",
                     name, checkpoint.epoch, self.config.epochs);
-                // نسمح بالمرور للأسفل لبدء التدريب من حيث توقف
             }
             if idx > checkpoint.teacher_index { checkpoint.epoch = 0; }
-
+    
             println!("\n{}", "═".repeat(60));
             println!("🧬 Teacher {}/{}: {}", idx + 1, teachers.len(), name);
             println!("   {}", alignment.report());
             println!("{}", "═".repeat(60));
-
-            self.distill_one(student, varmap, teacher, alignment, &mut ewc, &mut checkpoint, data, tokenizer)?;
+    
+            self.distill_one(student, varmap, name, teacher, alignment, &mut ewc, &mut checkpoint, data, tokenizer)?;
         }
-
+    
         println!("\n🎉 ALL TEACHERS DONE!");
         Ok(())
     }
@@ -190,6 +182,7 @@ impl TrueDistiller {
         &self,
         student:    &mut ZumarModel,
         varmap:     &VarMap,
+        teacher_name: &str,
         teacher:    &AutoTeacher,
         alignment:  &VocabAlignment,
         ewc:        &mut EWC,
@@ -197,123 +190,159 @@ impl TrueDistiller {
         data:       &[String],
         tokenizer:  &ZumarTokenizer,
     ) -> Result<()> {
-        let teacher_name = teacher.config.arch_type.clone();
         let start_epoch  = checkpoint.epoch;
         let lr           = ewc.recommended_lr(self.config.base_lr);
-
+    
         println!("\n🧠 DISTILLATION: {}", teacher_name);
         println!("   Epochs:  {} → {}", start_epoch, self.config.epochs);
         println!("   LR:      {:.2e}", lr);
         println!("   Temp:    {}", self.config.temperature);
         println!("   EWC λ:   {}", self.config.ewc_lambda);
         println!("   Overlap: {} tokens", alignment.overlap_size());
-
+    
         if !alignment.is_usable() {
             println!("   ⚠️  Insufficient overlap (<1000) — skipping");
-            checkpoint.mark_teacher_done(&teacher_name);
+            checkpoint.mark_teacher_done(teacher_name);
             checkpoint.save(CKPT_PATH)?;
             return Ok(());
         }
-
+    
         let mut opt = candle_nn::SGD::new(varmap.all_vars(), lr)?;
-        // let mut opt = candle_nn::AdamW::new(
-        //     varmap.all_vars(),
-        //     candle_nn::ParamsAdamW {
-        //         lr,
-        //         beta1: 0.9,
-        //         beta2: 0.999,
-        //         eps: 1e-8,
-        //         weight_decay: 0.01,
-        //     },
-        // )?;
-
+    
         let start = Instant::now();
         let mut total_tokens = 0u64;
         let mut fisher_losses: Vec<Tensor> = Vec::new();
-        let mut graph_reset_counter = 0usize;  // جديد
-
+        let mut graph_reset_counter = 0usize;
+    
+        // ── تحميل Zlog offline باستخدام teacher_name (مرة واحدة فقط) ──
+        let zlog_path = format!("models/zlog/{}.zlog", teacher_name);
+        let offline_cache: Option<HashMap<u64, Vec<f32>>> =
+        if std::path::Path::new(&zlog_path).exists() {
+            println!("   📂 Offline mode: using {}", zlog_path);
+            match load_zlog(&zlog_path, teacher.config.vocab_size) {
+                Ok(c) => {
+                    println!("   ✅ Loaded {} entries (vocab={})", c.len(), teacher.config.vocab_size);
+                    // فحص أول logits للتأكد من أنها غير صفرية
+                    for (hash, logits) in c.iter().take(1) {
+                        let sum: f32 = logits.iter().map(|v| v.abs()).sum();
+                        let non_zero = logits.iter().filter(|&&v| v != 0.0).count();
+                        println!("   🔍 Sample logits: sum={:.4}, non-zero={}/{}", sum, non_zero, logits.len());
+                        if sum == 0.0 {
+                            println!("   ⚠️  WARNING: All logits are zero! Check teacher.predict_with_embeddings");
+                        }
+                    }
+                    Some(c)
+                },
+                Err(e) => {
+                    println!("   ⚠️  Failed to load zlog: {} — falling back to online", e);
+                    None
+                }
+            }
+        } else {
+            println!("   🌐 Online mode (no zlog found)");
+            None
+        };
+    
         for epoch in start_epoch..self.config.epochs {
             let mut loss_sum    = 0.0f32;
             let mut token_count = 0u32;
             let mut accum_loss: Option<Tensor> = None;
-
+    
             for text in data.iter() {
                 let zumar_tokens = match tokenizer.encode_ids(text) {
                     Ok(t) if t.len() >= 2 => t,
                     _ => continue,
                 };
-                let teacher_tokens = teacher.tokenize(text);
-
-                for i in 0..zumar_tokens.len().saturating_sub(1) {
-                // let max_tokens = 10.min(zumar_tokens.len().saturating_sub(1));  // نأخذ أول 10 رموز فقط
-                // for i in 0..max_tokens {
-                    let t_end = (i + 1).min(teacher_tokens.len());
-
-                    // استخدام cache الهجين
-                    let teacher_logits = LOGITS_CACHE.with(|cache| {
-                        cache.borrow_mut().get_or_compute(&teacher_tokens[..t_end], teacher)
-                    })?;
+    
+                // في وضع offline لا نحتاج teacher_tokens
+                let teacher_tokens = if offline_cache.is_none() {
+                    teacher.tokenize(text)
+                } else {
+                    vec![]
+                };
+    
+                // تحديد عدد الرموز المراد معالجتها (تسريع مؤقت)
+                let max_tokens = 10.min(zumar_tokens.len().saturating_sub(1));
+                for i in 0..max_tokens {
+                    let t_end = if offline_cache.is_none() {
+                        (i + 1).min(teacher_tokens.len())
+                    } else {
+                        0
+                    };
+    
+                    let teacher_logits = if let Some(ref cache) = offline_cache {
+                        let clean_text = text.trim();
+                        let hash = {
+                            let mut h: u64 = 0xcbf29ce484222325;
+                            for &b in clean_text.as_bytes() {
+                                h ^= b as u64;
+                                h = h.wrapping_mul(0x100000001b3);
+                            }
+                            h
+                        };
+                        match cache.get(&hash) {
+                            Some(l) => l.clone(),
+                            None => continue,
+                        }
+                    } else {
+                        LOGITS_CACHE.with(|c| {
+                            c.borrow_mut().get_or_compute(&teacher_tokens[..t_end], teacher)
+                        })?
+                    };
+    
                     if total_tokens == 0 && epoch == start_epoch {
                         let t_sum: f32 = teacher_logits.iter().map(|v| v.abs()).sum();
                         let t_max = teacher_logits.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
-                        eprintln!("🔬 Teacher logits (hybrid): sum={:.4} max={:.4} len={}", t_sum, t_max, teacher_logits.len());
+                        eprintln!("🔬 Teacher logits: sum={:.4} max={:.4} len={}", t_sum, t_max, teacher_logits.len());
                     }
-
+    
+                    // forward للطالب
                     let input = Tensor::new(&zumar_tokens[..=i], &self.device)?;
                     let emb   = student.embedding.forward(&input)?.unsqueeze(0)?;
                     let mut h = emb;
                     for layer in &mut student.layers {
-                        h = layer.forward_checkpointed(&h)?;
+                        h = layer.forward(&h)?;
                     }
-                     // أضف هذا السطر:
-                    let _ = h.clone(); // نجبر الاحتفاظ بـ h فقط
                     h = student.final_norm.forward(&h)?;
-                    
                     let logits  = student.lm_head.forward(&h)?;
                     let seq_len = logits.dim(1)?;
                     let last    = logits.narrow(1, seq_len - 1, 1)?.squeeze(0)?.squeeze(0)?;
+    
                     if total_tokens == 0 && epoch == start_epoch {
                         let s = last.to_vec1::<f32>().unwrap_or_default();
                         let s_sum: f32 = s.iter().map(|v| v.abs()).sum();
                         let s_max = s.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
                         eprintln!("🔬 Student logits: sum={:.4} max={:.4} len={}", s_sum, s_max, s.len());
                     }
-                    
+    
                     let kl = alignment.kl_divergence(
                         &teacher_logits,
                         &last,
                         self.config.temperature,
                         &self.device,
                     )?;
-                      
-                    // واستبدل بهذا:
-                    let ewc_loss   = ewc.loss_differentiable(varmap, &self.device)?;
+                    // let ewc_loss   = ewc.loss_differentiable(varmap, &self.device)?;
+                    let ewc_loss   = ewc.loss_differentiable(varmap, &self.device)?.reshape(&[])?;
                     let total_loss = (&kl + &ewc_loss)?;
-                    // let ewc_val = ewc.loss(varmap, &self.device)?;
-                    // let ewc_scalar = ewc_val.to_scalar::<f32>().unwrap_or(0.0);
-                    // let total_loss = (&kl + ewc_scalar as f64)?;
-
+    
                     let kl_val = kl.to_scalar::<f32>().unwrap_or(0.0);
                     loss_sum    += kl_val;
                     token_count += 1;
                     total_tokens += 1;
-
+    
                     accum_loss = Some(match accum_loss {
                         None       => total_loss,
                         Some(prev) => (&prev + &total_loss)?,
                     });
-
+    
                     if token_count as usize % self.config.accum_steps == 0 {
                         if let Some(loss) = accum_loss.take() {
                             if fisher_losses.len() < 10 {
                                 fisher_losses.push(loss.clone());
                             }
                             opt.backward_step(&loss)?;
-                            
-                            // ✅ تحرير computation graph كل 4 خطوات
                             graph_reset_counter += 1;
                             if graph_reset_counter >= 4 {
-                                // تفريغ المتغيرات الوسيطة وإجبار تحرير الذاكرة
                                 drop(loss);
                                 graph_reset_counter = 0;
                             }
@@ -321,7 +350,7 @@ impl TrueDistiller {
                     }
                 }
             }
-            
+    
             if let Some(loss) = accum_loss.take() {
                 if fisher_losses.len() < 10 {
                     fisher_losses.push(loss.clone());
@@ -330,13 +359,12 @@ impl TrueDistiller {
                 drop(loss);
                 graph_reset_counter = 0;
             }
-            
-
+    
             let avg_loss = loss_sum / token_count.max(1) as f32;
             checkpoint.epoch = epoch + 1;
             checkpoint.total_epochs += token_count as usize;
             if avg_loss < checkpoint.best_loss { checkpoint.best_loss = avg_loss; }
-
+    
             if (epoch + 1) % self.config.save_every == 0 || epoch == self.config.epochs - 1 {
                 std::fs::create_dir_all("models/zumar-v1").ok();
                 varmap.save(MODEL_PATH)?;
@@ -344,22 +372,19 @@ impl TrueDistiller {
                 checkpoint.save(CKPT_PATH)?;
                 fisher_losses = fisher_losses.into_iter().rev().take(10).rev().collect();
             }
-
+    
             let tps = total_tokens as f64 / start.elapsed().as_secs_f64().max(0.1);
             println!("  Ep {:>4}/{}: KL={:.8}  {:.0} tok/s", epoch + 1, self.config.epochs, avg_loss, tps);
         }
-
+    
         // Fisher
         println!("\n   📐 Computing Fisher for '{}'...", teacher_name);
         let single_loss = fisher_losses.first().map(|l| vec![l.clone()]).unwrap_or_default();
-        ewc.update(varmap, &single_loss, &teacher_name, self.config.epochs, &self.device)?;
+        ewc.update(varmap, &single_loss, teacher_name, self.config.epochs, &self.device)?;
         ewc.save(EWC_PATH)?;
-        // ewc.cumulative_fisher.clear();
-        // ewc.cumulative_optimal.clear();
-        checkpoint.mark_teacher_done(&teacher_name);
+        checkpoint.mark_teacher_done(teacher_name);
         checkpoint.save(CKPT_PATH)?;
-
-        // إحصائيات cache
+    
         LOGITS_CACHE.with(|c| {
             let (hits, misses, causal_ok, causal_fail) = c.borrow().stats();
             if hits + misses > 0 {
@@ -367,7 +392,7 @@ impl TrueDistiller {
                 println!("   📊 Causal: {} OK / {} fallback", causal_ok, causal_fail);
             }
         });
-
+    
         println!("\n⏱ Total: {:.1}s", start.elapsed().as_secs_f64());
         Ok(())
     }
@@ -595,8 +620,7 @@ impl AutoTeacher {
             self.get_tensor(&format!("{}.attn.c_attn.weight", p)),
             self.get_tensor(&format!("{}.attn.c_proj.weight", p)),
         ) {
-            // GPT-2: c_attn [768, 2304] → [hidden, 3*hidden]
-            let attn_hidden = c_attn.dim(0)?; // 768
+            let attn_hidden = c_attn.dim(0)?;
             let qkv = x.reshape((batch * seq_len, hidden_dim))?
                         .matmul(&c_attn.t()?)?
                         .reshape((batch, seq_len, attn_hidden))?;
@@ -606,13 +630,11 @@ impl AutoTeacher {
             let k = qkv.narrow(2, head_dim, head_dim)?;
             let v = qkv.narrow(2, head_dim * 2, head_dim)?;
             
-            // Scaled dot-product attention
             let scale = (head_dim as f64).sqrt();
             let scores = (q.matmul(&k.transpose(1, 2)?)? / scale)?;
             let scores = (scores + mask)?;
             let attn_weights = candle_nn::ops::softmax(&scores, D::Minus1)?;
             
-            // إسقاط
             let attn_output = attn_weights.matmul(&v)?;
             let attn_2d = attn_output.reshape((batch * seq_len, head_dim))?;
             return attn_2d.matmul(&c_proj.t()?)?.reshape((batch, seq_len, c_proj.dim(0)?));
@@ -641,7 +663,6 @@ impl AutoTeacher {
             return attn_2d.matmul(&ow.t()?)?.reshape((batch, seq_len, ow.dim(0)?));
         }
         
-        // لا يوجد نمط مدعوم - ارجاع الخطأ
         Err(candle_core::Error::Msg(format!("No attention weights found for {}", p)))
     }
         
@@ -695,4 +716,42 @@ impl AutoTeacher {
         }
         TeacherConfig { embedding_key: "wte.weight".into(), num_layers: 6, hidden_dim: 768, vocab_size: 50257, arch_type: "unknown".into(), prefix_format: "h.{i}".into() }
     }
+}
+
+// ════════════════════════════════════════════════════════════
+// load_zlog — تحميل logits من ملف مع التحقق من حجم المفردات
+// ════════════════════════════════════════════════════════════
+pub fn load_zlog(path: &str, expected_vocab_size: usize) -> Result<HashMap<u64, Vec<f32>>> {
+    let data = std::fs::read(path)
+        .map_err(|e| candle_core::Error::Msg(format!("Cannot read zlog: {}", e)))?;
+    
+    let mut cache = HashMap::new();
+    let mut offset = 0;
+    
+    while offset + 12 <= data.len() {
+        let key_hash = u64::from_le_bytes(data[offset..offset+8].try_into().unwrap());
+        offset += 8;
+        
+        let len = u32::from_le_bytes(data[offset..offset+4].try_into().unwrap()) as usize;
+        offset += 4;
+        
+        if len != expected_vocab_size {
+            return Err(candle_core::Error::Msg(format!(
+                "Vocab mismatch: file has {} but expected {}", len, expected_vocab_size
+            )));
+        }
+        
+        let mut logits = Vec::with_capacity(len);
+        for _ in 0..len {
+            if offset + 2 > data.len() { break; }
+            let bits = u16::from_le_bytes(data[offset..offset+2].try_into().unwrap());
+            let val = half::f16::from_bits(bits).to_f32();
+            logits.push(val);
+            offset += 2;
+        }
+        
+        cache.insert(key_hash, logits);
+    }
+    
+    Ok(cache)
 }

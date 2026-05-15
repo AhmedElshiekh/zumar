@@ -109,6 +109,12 @@ async fn main() -> Result<()> {
             println!("\n💾 Saved!");
         }
         
+        "extract" => {
+            println!("\n📡 SIGNAL EXTRACTION MODE\n");
+            signal_extractor(&args, &device, vocab_size, hidden_size, num_layers, num_experts, top_k, n_heads)?;
+            println!("\n✅ Signal extraction complete! Run: cargo run -- distill 10 /data");
+        }
+        
         "help" | "--help" | "-h" => { print_usage(); }
         
         _ => {
@@ -485,28 +491,30 @@ fn distill_runner(
     };
 
     // ── تحميل المعلمين ──────────────────────────────────────
-    let mut teachers_and_alignments: Vec<(true_distill::AutoTeacher, vocab_aligner::VocabAlignment)>
+    let mut teachers_and_alignments: Vec<(String, true_distill::AutoTeacher, vocab_aligner::VocabAlignment)>
         = Vec::new();
-
+    
     for (path, alignment) in teacher_paths.iter().zip(aligner.into_iter()) {
-        // طباعة اسم الم
-          let teacher_label = path.file_name().unwrap().to_string_lossy(); 
-          println!("   🧬 Attempting: {}", teacher_label);  
-          let file_size = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0); 
-          if file_size > 500_000_000 {     
-                eprintln!("   ⚠️  SKIPPING {} ({} MB) - too large for device memory",         
-                teacher_label, 
-                file_size / 1_048_576);     
-                continue;
-          }  
-          match true_distill::AutoTeacher::load(path.to_str().unwrap(), &device) {
+        let teacher_label = path.parent()
+            .and_then(|p| p.file_name())
+            .and_then(|s| s.to_str())
+            .unwrap_or("unknown")
+            .to_string();
+        println!("   🧬 Attempting: {}", teacher_label);
+        let file_size = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+        if file_size > 500_000_000 {
+            eprintln!("   ⚠️  SKIPPING {} ({} MB) - too large for device memory",
+                teacher_label, file_size / 1_048_576);
+            continue;
+        }
+        match true_distill::AutoTeacher::load(path.to_str().unwrap(), &device) {
             Ok(teacher) => {
                 if teacher.config.arch_type == "skip" {
                     println!("   ⚠️  Skipping incompatible: {}",
                         path.file_name().unwrap().to_string_lossy());
                     continue;
                 }
-                teachers_and_alignments.push((teacher, alignment));
+                teachers_and_alignments.push((teacher_label, teacher, alignment));
             }
             Err(e) => println!("   ❌ Load failed: {}", e),
         }
@@ -523,7 +531,7 @@ fn distill_runner(
         base_lr:     0.01,  //1e-3,
         temperature: 1.0,  //3.0,
         ewc_lambda,
-        accum_steps: 1, //4,
+        accum_steps: 32, //4,
         save_every:  5,  //10,
         lora_rank: 8,
         lora_alpha: 16.0,
@@ -563,4 +571,148 @@ fn collect_teacher_files(dir: &std::path::Path, files: &mut Vec<std::path::PathB
             }
         }
     }
+}
+
+
+fn signal_extractor(
+    args: &Vec<String>,
+    device: &candle_core::Device,
+    vocab_size: usize,      // حجم الطالب (غير مستخدم هنا)
+    hidden_size: usize,
+    num_layers: usize,
+    num_experts: usize,
+    top_k: usize,
+    n_heads: usize,
+) -> Result<()> {
+    use crate::tokenizer::ZumarTokenizer;
+    use crate::true_distill::AutoTeacher;
+    use half::f16;
+    use std::io::Write;
+
+    println!("══════════════════════════════════════════════════");
+    println!("📡 ZUMAR SIGNAL EXTRACTOR");
+    println!("══════════════════════════════════════════════════");
+
+    // ١. جمع ملفات المعلمين
+    let teacher_dir = std::path::Path::new("models/teacher");
+    if !teacher_dir.exists() {
+        println!("❌ models/teacher/ not found");
+        return Ok(());
+    }
+
+    let mut teacher_paths = Vec::new();
+    collect_teacher_files(teacher_dir, &mut teacher_paths);
+    teacher_paths.sort_by_key(|p| std::fs::metadata(p).map(|m| m.len()).unwrap_or(0));
+
+    // ٢. تحميل tokenizer الطالب (لحساب الهاش فقط)
+    let tokenizer = match ZumarTokenizer::load_or_train(
+        "models/tokenizer/tokenizer.json",
+        "data",
+        50257,
+    ) {
+        Ok(t) => {
+            println!("   ✅ Tokenizer loaded: {} tokens", t.vocab_size());
+            t
+        }
+        Err(e) => {
+            println!("❌ Tokenizer error: {}", e);
+            return Ok(());
+        }
+    };
+
+    // ٣. تحميل نصوص التدريب
+    let training_data = data::TrainingData::load(args.get(2).map(|s| s.as_str()));
+    let all_texts = training_data.texts.clone();
+    println!("   📊 Training texts: {}", all_texts.len());
+
+    // ٤. إنشاء مجلد zlog
+    std::fs::create_dir_all("models/zlog")?;
+
+    // ٥. استخراج Logits لكل معلم
+    for path in &teacher_paths {
+        let file_size = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+        if file_size > 700_000_000 {
+            println!("   ⚠️  Skipping {} ({} MB) - too large",
+                path.file_name().unwrap().to_string_lossy(),
+                file_size / 1_048_576);
+            continue;
+        }
+
+        let teacher_name = path.parent()
+            .and_then(|p| p.file_name())
+            .and_then(|s| s.to_str())
+            .unwrap_or("unknown")
+            .to_string();
+
+        println!("\n🧠 Extracting from '{}'...", teacher_name);
+
+        let teacher = match AutoTeacher::load(path.to_str().unwrap(), device) {
+            Ok(t) => t,
+            Err(e) => {
+                println!("   ❌ Cannot load: {}", e);
+                continue;
+            }
+        };
+
+        let real_vocab_size = teacher.config.vocab_size; // الحجم الحقيقي للمفردات
+        println!("   📚 Teacher vocab size: {}", real_vocab_size);
+
+        let output_path = format!("models/zlog/{}.zlog", teacher_name);
+        let mut file = std::fs::File::create(&output_path)?;
+
+        let mut entry_count = 0u32;
+        let total = all_texts.len();
+
+        for (i, text) in all_texts.iter().enumerate() {
+            let tokens = teacher.tokenize(text);
+            
+            // if tokens.len() < 2 { continue; }
+            if tokens.is_empty() { continue; }
+
+            let logits_raw = match teacher.predict_with_embeddings(&tokens) {
+                Ok(l) => l,
+                Err(_) => continue,
+            };
+
+            // اقتصاص إلى الحجم الحقيقي للمفردات
+            let logits = if logits_raw.len() > real_vocab_size {
+                logits_raw[..real_vocab_size].to_vec()
+            } else {
+                logits_raw
+            };
+
+            // حساب hash (نفس طريقة التقطير)
+            let clean_text = text.trim();
+            let key_hash = {
+                let mut hash: u64 = 0xcbf29ce484222325;
+                for &b in clean_text.as_bytes() {
+                    hash ^= b as u64;
+                    hash = hash.wrapping_mul(0x100000001b3);
+                }
+                hash
+            };
+
+            // كتابة: hash (8) + len (4) + logits f16
+            file.write_all(&key_hash.to_le_bytes())?;
+            file.write_all(&(logits.len() as u32).to_le_bytes())?;
+            for &val in &logits {
+                let f16_val = f16::from_f32(val);
+                file.write_all(&f16_val.to_bits().to_le_bytes())?;
+            }
+
+            entry_count += 1;
+
+            if (i + 1) % 10 == 0 || i == total - 1 {
+                println!("   📝 {}/{} texts processed", i + 1, total);
+            }
+        }
+
+        println!("   ✅ Saved: {} ({} entries, vocab={})", output_path, entry_count, real_vocab_size);
+    }
+
+    println!("\n🎉 Signal extraction complete!");
+    println!("   📂 Files saved in models/zlog/");
+    println!("   🚀 Now run: cargo run -- distill 10 /data");
+
+    Ok(())
 }
