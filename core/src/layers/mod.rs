@@ -186,6 +186,7 @@ impl ZumarModel {
         let lm_head    = ZumarBitLinear::new(in_dim, vocab_size, vs.pp("lm_head"))?;
         Ok(Self { embedding, layers, final_norm, lm_head, hidden_size: in_dim, vocab_size })
     }
+    
     pub fn new_qlora(
         vocab_size: usize, in_dim: usize, num_layers: usize,
         num_experts: usize, top_k: usize, n_heads: usize,
@@ -275,6 +276,7 @@ impl ZumarModel {
         }
         Ok(())
     }
+    
       /// تفعيل QLoRA: تكميم + LoRA
     pub fn add_qlora(&mut self, rank: usize, alpha: f64) -> Result<()> {
       println!("   🧬 Quantizing model to NF4...");
@@ -301,6 +303,18 @@ impl ZumarModel {
       Ok(())
   }
   
+      /// تمرير تسلسل كامل من الرموز واستخراج logits لكل موضع
+    pub fn forward_sequence(&mut self, input_ids: &Tensor) -> Result<Tensor> {
+        let emb = self.embedding.forward(input_ids)?;     // (1, seq_len, hidden)
+        let mut h = emb;
+        for layer in  &mut self.layers {
+            h = layer.forward(&h)?;
+        }
+        h = self.final_norm.forward(&h)?;
+        let logits = self.lm_head.forward(&h)?;           // (1, seq_len, vocab)
+        Ok(logits)
+    }
+
 }
 
 /// ✅ إصلاح: فك الضغط إلى F32 مباشرة (كان F16 → dtype mismatch مع بقية النموذج)

@@ -53,7 +53,7 @@ async fn main() -> Result<()> {
     let mode = args.get(1).map(|s| s.as_str()).unwrap_or("chat");
     
     let hidden_size: usize = 512;
-    let num_layers: usize = 16;
+    let num_layers: usize = 12;
     let n_heads: usize = 16;   // بدلاً من 16
     let kv_heads: usize = 4;  // جديد: رأس واحد لـ K و V
     let vocab_size: usize = 50257;
@@ -531,9 +531,9 @@ fn distill_runner(
         base_lr:     0.01,  //1e-3,
         temperature: 1.0,  //3.0,
         ewc_lambda,
-        accum_steps: 32, //4,
+        accum_steps: 64, //4,
         save_every:  5,  //10,
-        lora_rank: 8,
+        lora_rank: 4,
         lora_alpha: 16.0,
     };
     let distiller = true_distill::TrueDistiller::new(config, device.clone());

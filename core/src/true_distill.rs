@@ -1,5 +1,5 @@
 use candle_core::{Tensor, Result, Device, D};
-use candle_nn::{VarMap, Optimizer, Module, AdamW, ParamsAdamW};
+use candle_nn::{VarMap, Optimizer, Module};
 use crate::layers::ZumarModel;
 use crate::tokenizer::ZumarTokenizer;
 use crate::layers::vocab_aligner::{VocabAligner, VocabAlignment};
@@ -8,15 +8,15 @@ use std::collections::HashMap;
 use std::time::Instant;
 use std::path::Path;
 use std::cell::RefCell;
-use half::{f16, bf16};
+use half::f16;
 
 const EWC_PATH:   &str = "models/zumar-v1/ewc_state.json";
 const CKPT_PATH:  &str = "models/zumar-v1/distill_checkpoint.json";
 const MODEL_PATH: &str = "models/zumar-v1/model.safetensors";
 
-// ════════════════════════════════════════════════════════════
-// TeacherLogitsCache — نظام التخزين المؤقت الهجين
-// ════════════════════════════════════════════════════════════
+// ──────────────────────────────────────────────────────────────
+// TeacherLogitsCache (كما هي)
+// ──────────────────────────────────────────────────────────────
 thread_local! {
     static LOGITS_CACHE: RefCell<TeacherLogitsCache> = RefCell::new(TeacherLogitsCache::new());
 }
@@ -55,49 +55,24 @@ impl TeacherLogitsCache {
         teacher: &AutoTeacher,
     ) -> Result<Vec<f32>> {
         let key = Self::hash_tokens(tokens);
-        
         if let Some(cached) = self.cache.get(&key) {
             self.hits += 1;
-            if self.hits == 1 {
-                eprintln!("🟢 Logits Cache HIT (using cached logits)");
-            }
             return Ok(cached.clone());
         }
-        
         self.misses += 1;
-        if self.misses == 1 {
-            eprintln!("🟡 Logits Cache MISS — computing...");
-        }
-        
-        let logits = match teacher.predict_with_causal_attention(tokens) {
-            Ok(l) => {
-                self.causal_successes += 1;
-                if self.causal_successes == 1 {
-                    eprintln!("   ✅ Causal Attention SUCCESS");
-                }
-                l
-            }
-            Err(_) => {
-                self.causal_failures += 1;
-                if self.causal_failures == 1 {
-                    eprintln!("   ⚠️  Causal Attention failed — fallback to Embeddings");
-                }
-                teacher.predict_with_embeddings(tokens)?
-            }
-        };
-
+        let logits = teacher.predict_with_embeddings(tokens)?; // تجنب causal attention
         self.cache.insert(key, logits.clone());
         Ok(logits)
     }
     
     pub fn stats(&self) -> (usize, usize, usize, usize) {
-        (self.hits, self.misses, self.causal_successes, self.causal_failures)
+        (self.hits, self.misses, 0, 0)
     }
 }
 
-// ════════════════════════════════════════════════════════════
+// ──────────────────────────────────────────────────────────────
 // DistillConfig
-// ════════════════════════════════════════════════════════════
+// ──────────────────────────────────────────────────────────────
 pub struct DistillConfig {
     pub epochs:      usize,
     pub base_lr:     f64,
@@ -124,9 +99,9 @@ impl Default for DistillConfig {
     }
 }
 
-// ════════════════════════════════════════════════════════════
+// ──────────────────────────────────────────────────────────────
 // TrueDistiller
-// ════════════════════════════════════════════════════════════
+// ──────────────────────────────────────────────────────────────
 pub struct TrueDistiller {
     pub config: DistillConfig,
     pub device: Device,
@@ -141,7 +116,7 @@ impl TrueDistiller {
         &self,
         student:   &mut ZumarModel,
         varmap:    &VarMap,
-        teachers:  &[(String, AutoTeacher, VocabAlignment)], // (name, teacher, alignment)
+        teachers:  &[(String, AutoTeacher, VocabAlignment)],
         data:      &[String],
         tokenizer: &ZumarTokenizer,
     ) -> Result<()> {
@@ -149,7 +124,7 @@ impl TrueDistiller {
         let mut checkpoint = DistillCheckpoint::load(CKPT_PATH)?;
     
         println!("\n{}", "═".repeat(60));
-        println!("🧬 MULTI-TEACHER DISTILLATION (Hybrid Cache + Causal + Embedding)");
+        println!("🧬 MULTI-TEACHER DISTILLATION (Optimized)");
         println!("   Teachers: {}  |  Samples: {}", teachers.len(), data.len());
         println!("   Resume:   teacher={} epoch={}", checkpoint.teacher_index, checkpoint.epoch);
         ewc.report();
@@ -157,250 +132,195 @@ impl TrueDistiller {
     
         for (idx, (name, teacher, alignment)) in teachers.iter().enumerate() {
             if checkpoint.is_teacher_done(name) && checkpoint.epoch >= self.config.epochs {
-                println!("\n   ⏭️  Skipping '{}' (already done with max epochs)", name);
+                println!("\n   ⏭️  Skipping '{}'", name);
                 continue;
-            }
-            if checkpoint.is_teacher_done(name) && checkpoint.epoch < self.config.epochs {
-                println!("\n   🔄 Resuming '{}' for more epochs ({} → {})",
-                    name, checkpoint.epoch, self.config.epochs);
             }
             if idx > checkpoint.teacher_index { checkpoint.epoch = 0; }
     
-            println!("\n{}", "═".repeat(60));
-            println!("🧬 Teacher {}/{}: {}", idx + 1, teachers.len(), name);
+            println!("\n🧬 Teacher {}/{}: {}", idx + 1, teachers.len(), name);
             println!("   {}", alignment.report());
-            println!("{}", "═".repeat(60));
     
             self.distill_one(student, varmap, name, teacher, alignment, &mut ewc, &mut checkpoint, data, tokenizer)?;
         }
-    
-        println!("\n🎉 ALL TEACHERS DONE!");
         Ok(())
     }
 
     pub fn distill_one(
         &self,
-        student:    &mut ZumarModel,
-        varmap:     &VarMap,
+        student: &mut ZumarModel,
+        varmap: &VarMap,
         teacher_name: &str,
-        teacher:    &AutoTeacher,
-        alignment:  &VocabAlignment,
-        ewc:        &mut EWC,
+        teacher: &AutoTeacher,
+        alignment: &VocabAlignment,
+        ewc: &mut EWC,
         checkpoint: &mut DistillCheckpoint,
-        data:       &[String],
-        tokenizer:  &ZumarTokenizer,
+        data: &[String],
+        tokenizer: &ZumarTokenizer,
     ) -> Result<()> {
-        let start_epoch  = checkpoint.epoch;
-        let lr           = ewc.recommended_lr(self.config.base_lr);
+        let start_epoch = checkpoint.epoch;
+        let lr = ewc.recommended_lr(self.config.base_lr);
     
-        println!("\n🧠 DISTILLATION: {}", teacher_name);
-        println!("   Epochs:  {} → {}", start_epoch, self.config.epochs);
-        println!("   LR:      {:.2e}", lr);
-        println!("   Temp:    {}", self.config.temperature);
-        println!("   EWC λ:   {}", self.config.ewc_lambda);
-        println!("   Overlap: {} tokens", alignment.overlap_size());
+        println!("   Epochs: {}/{} | LR: {:.2e} | Temp: {}", start_epoch, self.config.epochs, lr, self.config.temperature);
     
         if !alignment.is_usable() {
-            println!("   ⚠️  Insufficient overlap (<1000) — skipping");
+            println!("   ⚠️  Skipping (overlap <1000)");
             checkpoint.mark_teacher_done(teacher_name);
             checkpoint.save(CKPT_PATH)?;
             return Ok(());
         }
     
         let mut opt = candle_nn::SGD::new(varmap.all_vars(), lr)?;
-    
         let start = Instant::now();
         let mut total_tokens = 0u64;
         let mut fisher_losses: Vec<Tensor> = Vec::new();
-        let mut graph_reset_counter = 0usize;
     
-        // ── تحميل Zlog offline باستخدام teacher_name (مرة واحدة فقط) ──
+        // تحميل offline cache
         let zlog_path = format!("models/zlog/{}.zlog", teacher_name);
-        let offline_cache: Option<HashMap<u64, Vec<f32>>> =
-        if std::path::Path::new(&zlog_path).exists() {
-            println!("   📂 Offline mode: using {}", zlog_path);
+        let offline_cache = if Path::new(&zlog_path).exists() {
+            println!("   📂 Offline mode using {}", zlog_path);
             match load_zlog(&zlog_path, teacher.config.vocab_size) {
                 Ok(c) => {
                     println!("   ✅ Loaded {} entries (vocab={})", c.len(), teacher.config.vocab_size);
-                    // فحص أول logits للتأكد من أنها غير صفرية
-                    for (hash, logits) in c.iter().take(1) {
-                        let sum: f32 = logits.iter().map(|v| v.abs()).sum();
-                        let non_zero = logits.iter().filter(|&&v| v != 0.0).count();
-                        println!("   🔍 Sample logits: sum={:.4}, non-zero={}/{}", sum, non_zero, logits.len());
-                        if sum == 0.0 {
-                            println!("   ⚠️  WARNING: All logits are zero! Check teacher.predict_with_embeddings");
-                        }
-                    }
                     Some(c)
-                },
+                }
                 Err(e) => {
-                    println!("   ⚠️  Failed to load zlog: {} — falling back to online", e);
+                    println!("   ⚠️  Zlog error: {} -> online", e);
                     None
                 }
             }
-        } else {
-            println!("   🌐 Online mode (no zlog found)");
-            None
-        };
+        } else { None };
     
         for epoch in start_epoch..self.config.epochs {
-            let mut loss_sum    = 0.0f32;
-            let mut token_count = 0u32;
-            let mut accum_loss: Option<Tensor> = None;
+            let mut loss_sum = 0.0f32;
+            let mut step_count = 0usize;
+            let mut accum_kl: Option<Tensor> = None;
     
             for text in data.iter() {
+                // 1. ترميز الطالب
                 let zumar_tokens = match tokenizer.encode_ids(text) {
                     Ok(t) if t.len() >= 2 => t,
                     _ => continue,
                 };
+                let seq_len = zumar_tokens.len();
     
-                // في وضع offline لا نحتاج teacher_tokens
-                let teacher_tokens = if offline_cache.is_none() {
-                    teacher.tokenize(text)
+                // 2. الحصول على logits المعلم (مرة واحدة لكل نص)
+                let teacher_logits = if let Some(ref cache) = offline_cache {
+                    let clean_text = text.trim();
+                    let hash = {
+                        let mut h = 0xcbf29ce484222325u64;
+                        for &b in clean_text.as_bytes() {
+                            h ^= b as u64;
+                            h = h.wrapping_mul(0x100000001b3);
+                        }
+                        h
+                    };
+                    match cache.get(&hash) {
+                        Some(l) => l.clone(),
+                        None => continue,
+                    }
                 } else {
-                    vec![]
+                    let teacher_tokens = teacher.tokenize(text);
+                    LOGITS_CACHE.with(|c| c.borrow_mut().get_or_compute(&teacher_tokens, teacher))?
                 };
     
-                // تحديد عدد الرموز المراد معالجتها (تسريع مؤقت)
-                let max_tokens = 10.min(zumar_tokens.len().saturating_sub(1));
-                for i in 0..max_tokens {
-                    let t_end = if offline_cache.is_none() {
-                        (i + 1).min(teacher_tokens.len())
-                    } else {
-                        0
-                    };
+                // 3. forward الطالب على التسلسل كاملاً (مرة واحدة)
+                let input_ids = Tensor::new(zumar_tokens.as_slice(), &self.device)?.unsqueeze(0)?;
+                let student_logits_all = student.forward_sequence(&input_ids)?; // (1, seq_len, vocab)
     
-                    let teacher_logits = if let Some(ref cache) = offline_cache {
-                        let clean_text = text.trim();
-                        let hash = {
-                            let mut h: u64 = 0xcbf29ce484222325;
-                            for &b in clean_text.as_bytes() {
-                                h ^= b as u64;
-                                h = h.wrapping_mul(0x100000001b3);
-                            }
-                            h
-                        };
-                        match cache.get(&hash) {
-                            Some(l) => l.clone(),
-                            None => continue,
-                        }
-                    } else {
-                        LOGITS_CACHE.with(|c| {
-                            c.borrow_mut().get_or_compute(&teacher_tokens[..t_end], teacher)
-                        })?
-                    };
+                // 4. استخدام آخر رمز فقط لحساب KL (تسريع هائل)
+                let last_student_logit = student_logits_all
+                    .narrow(1, seq_len - 1, 1)?
+                    .squeeze(0)?
+                    .squeeze(0)?;
     
-                    if total_tokens == 0 && epoch == start_epoch {
-                        let t_sum: f32 = teacher_logits.iter().map(|v| v.abs()).sum();
-                        let t_max = teacher_logits.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
-                        eprintln!("🔬 Teacher logits: sum={:.4} max={:.4} len={}", t_sum, t_max, teacher_logits.len());
-                    }
+                let kl = alignment.kl_divergence(
+                    &teacher_logits,
+                    &last_student_logit,
+                    self.config.temperature,
+                    &self.device,
+                )?;
+                let kl_val = kl.to_scalar::<f32>()?;
+                loss_sum += kl_val;
+                total_tokens += (seq_len - 1) as u64; // تقديري
+                step_count += 1;
     
-                    // forward للطالب
-                    let input = Tensor::new(&zumar_tokens[..=i], &self.device)?;
-                    let emb   = student.embedding.forward(&input)?.unsqueeze(0)?;
-                    let mut h = emb;
-                    for layer in &mut student.layers {
-                        h = layer.forward(&h)?;
-                    }
-                    h = student.final_norm.forward(&h)?;
-                    let logits  = student.lm_head.forward(&h)?;
-                    let seq_len = logits.dim(1)?;
-                    let last    = logits.narrow(1, seq_len - 1, 1)?.squeeze(0)?.squeeze(0)?;
+                accum_kl = Some(match accum_kl {
+                    None => kl,
+                    Some(prev) => (&prev + &kl)?,
+                });
     
-                    if total_tokens == 0 && epoch == start_epoch {
-                        let s = last.to_vec1::<f32>().unwrap_or_default();
-                        let s_sum: f32 = s.iter().map(|v| v.abs()).sum();
-                        let s_max = s.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
-                        eprintln!("🔬 Student logits: sum={:.4} max={:.4} len={}", s_sum, s_max, s.len());
-                    }
-    
-                    let kl = alignment.kl_divergence(
-                        &teacher_logits,
-                        &last,
-                        self.config.temperature,
-                        &self.device,
-                    )?;
-                    // let ewc_loss   = ewc.loss_differentiable(varmap, &self.device)?;
-                    let ewc_loss   = ewc.loss_differentiable(varmap, &self.device)?.reshape(&[])?;
-                    let total_loss = (&kl + &ewc_loss)?;
-    
-                    let kl_val = kl.to_scalar::<f32>().unwrap_or(0.0);
-                    loss_sum    += kl_val;
-                    token_count += 1;
-                    total_tokens += 1;
-    
-                    accum_loss = Some(match accum_loss {
-                        None       => total_loss,
-                        Some(prev) => (&prev + &total_loss)?,
-                    });
-    
-                    if token_count as usize % self.config.accum_steps == 0 {
-                        if let Some(loss) = accum_loss.take() {
-                            if fisher_losses.len() < 10 {
-                                fisher_losses.push(loss.clone());
-                            }
-                            opt.backward_step(&loss)?;
-                            graph_reset_counter += 1;
-                            if graph_reset_counter >= 4 {
-                                drop(loss);
-                                graph_reset_counter = 0;
-                            }
+                // كل accum_steps نقوم بـ backward (مع حساب ewc_loss مرة واحدة فقط)
+                if step_count % self.config.accum_steps == 0 {
+                    if let Some(kl_loss) = accum_kl.take() {
+                        let ewc_loss = ewc.loss_differentiable(varmap, &self.device)?.reshape(&[])?;
+                        let total_loss = (&kl_loss + &ewc_loss)?;
+                        opt.backward_step(&total_loss)?;
+                        if fisher_losses.len() < 10 {
+                            fisher_losses.push(total_loss);
                         }
                     }
                 }
             }
     
-            if let Some(loss) = accum_loss.take() {
+            // باقي الخسارة بعد الحلقة
+            if let Some(kl_loss) = accum_kl.take() {
+                let ewc_loss = ewc.loss_differentiable(varmap, &self.device)?.reshape(&[])?;
+                let total_loss = (&kl_loss + &ewc_loss)?;
+                opt.backward_step(&total_loss)?;
                 if fisher_losses.len() < 10 {
-                    fisher_losses.push(loss.clone());
+                    fisher_losses.push(total_loss);
                 }
-                opt.backward_step(&loss)?;
-                drop(loss);
-                graph_reset_counter = 0;
             }
     
-            let avg_loss = loss_sum / token_count.max(1) as f32;
+            let avg_loss = loss_sum / step_count.max(1) as f32;
             checkpoint.epoch = epoch + 1;
-            checkpoint.total_epochs += token_count as usize;
-            if avg_loss < checkpoint.best_loss { checkpoint.best_loss = avg_loss; }
+            checkpoint.total_epochs += step_count;
+            if avg_loss < checkpoint.best_loss {
+                checkpoint.best_loss = avg_loss;
+            }
     
             if (epoch + 1) % self.config.save_every == 0 || epoch == self.config.epochs - 1 {
                 std::fs::create_dir_all("models/zumar-v1").ok();
                 varmap.save(MODEL_PATH)?;
                 ewc.save(EWC_PATH)?;
                 checkpoint.save(CKPT_PATH)?;
-                fisher_losses = fisher_losses.into_iter().rev().take(10).rev().collect();
+                fisher_losses.truncate(10);
             }
     
-            let tps = total_tokens as f64 / start.elapsed().as_secs_f64().max(0.1);
-            println!("  Ep {:>4}/{}: KL={:.8}  {:.0} tok/s", epoch + 1, self.config.epochs, avg_loss, tps);
+            let elapsed = start.elapsed().as_secs_f64();
+            let tps = if elapsed > 0.0 {
+                total_tokens as f64 / elapsed
+            } else {
+                0.0
+            };
+            println!(
+                "  Ep {:>4}/{}: KL={:.8}  {:.1} tok/s",
+                epoch + 1,
+                self.config.epochs,
+                avg_loss,
+                tps
+            );
         }
     
-        // Fisher
+        // تحديث Fisher بعد الانتهاء
         println!("\n   📐 Computing Fisher for '{}'...", teacher_name);
-        let single_loss = fisher_losses.first().map(|l| vec![l.clone()]).unwrap_or_default();
-        ewc.update(varmap, &single_loss, teacher_name, self.config.epochs, &self.device)?;
+        if let Some(loss) = fisher_losses.first() {
+            ewc.update(varmap, &[loss.clone()], teacher_name, self.config.epochs, &self.device)?;
+        }
         ewc.save(EWC_PATH)?;
         checkpoint.mark_teacher_done(teacher_name);
         checkpoint.save(CKPT_PATH)?;
     
-        LOGITS_CACHE.with(|c| {
-            let (hits, misses, causal_ok, causal_fail) = c.borrow().stats();
-            if hits + misses > 0 {
-                println!("   📊 Cache: {} hits / {} misses ({:.0}% hit)", hits, misses, hits as f64/(hits+misses) as f64*100.0);
-                println!("   📊 Causal: {} OK / {} fallback", causal_ok, causal_fail);
-            }
-        });
-    
-        println!("\n⏱ Total: {:.1}s", start.elapsed().as_secs_f64());
+        println!("   ⏱ Total: {:.1}s", start.elapsed().as_secs_f64());
         Ok(())
     }
 }
 
 // ════════════════════════════════════════════════════════════
-// prepare_alignments_from_dir
+// باقي الدوال (prepare_alignments_from_dir, AutoTeacher, load_zlog, إلخ)
+// يجب أن تبقى كما هي، لكن أضف forward_sequence في ZumarModel (خارج هذا الملف)
 // ════════════════════════════════════════════════════════════
+
 pub fn prepare_alignments_from_dir(
     teacher_paths:    &[std::path::PathBuf],
     student_tok_path: &str,
@@ -416,14 +336,14 @@ pub fn prepare_alignments_from_dir(
             println!("   📚 '{}': {} tokens in teacher vocab", name, v.len());
             (v, s)
         } else {
-            println!("   ⚠️  No tokenizer.json for '{}' — limited alignment", name);
+            println!("   ⚠️  No tokenizer.json for '{}'", name);
             (HashMap::new(), 50257)
         };
-        let alignment = aligner.align(&teacher_vocab, t_size, &name);
-        alignments.push(alignment);
+        alignments.push(aligner.align(&teacher_vocab, t_size, &name));
     }
     Ok(alignments)
 }
+
 
 // ════════════════════════════════════════════════════════════
 // AutoTeacher — mmap + Hybrid Predict
