@@ -39,10 +39,20 @@ fn print_banner() {
 
 fn print_usage() {
     println!("\nUsage:");
-    println!("  distill <epochs>     - True distillation (resumes from last save)");
+    println!("  extract [--teacher NAME] [--force]  - Extract logits for a specific teacher");
+    println!("  distill <epochs> [--teachers NAMES] - True distillation (resumes from last save)");
     println!("  train <epochs>       - Self-training on built-in data");
     println!("  chat                 - Chat mode (default)");
     println!("  pack                 - Export to .zmr + .gguf");
+    println!("\nExamples:");
+    println!("  # Extract from all teachers");
+    println!("  cargo run -- extract /data");
+    println!("\n  # Extract from a single teacher only");
+    println!("  cargo run -- extract /data --teacher llama-13b");
+    println!("\n  # Force re-extract (overwrite existing)");
+    println!("  cargo run -- extract /data --teacher jais-13b --force");
+    println!("\n  # Distill from specific teachers");
+    println!("  cargo run -- distill 100 /data --teachers llama,jais");
 }
 
 #[tokio::main]
@@ -113,6 +123,26 @@ async fn main() -> Result<()> {
             println!("\n📡 SIGNAL EXTRACTION MODE\n");
             signal_extractor(&args, &device, vocab_size, hidden_size, num_layers, num_experts, top_k, n_heads)?;
             println!("\n✅ Signal extraction complete! Run: cargo run -- distill 10 /data");
+        }
+        
+        "list-teachers" => {
+            println!("\n📚 Available teachers:\n");
+            let teacher_dir = std::path::Path::new("models/teacher");
+            if teacher_dir.exists() {
+                let mut paths = Vec::new();
+                collect_teacher_files(teacher_dir, &mut paths);
+                for path in paths {
+                    let name = path.parent()
+                        .and_then(|p| p.file_name())
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("unknown");
+                    let mb = std::fs::metadata(&path).map(|m| m.len() as f64 / 1_048_576.0).unwrap_or(0.0);
+                    println!("   • {} ({:.1} MB)", name, mb);
+                }
+            } else {
+                println!("   ❌ No teachers found in models/teacher/");
+            }
+            return Ok(());
         }
         
         "help" | "--help" | "-h" => { print_usage(); }
@@ -423,31 +453,61 @@ fn distill_runner(
             return Ok(());
         }
     };
-
+    
+    
     // ── جمع ملفات المعلمين ──────────────────────────────────
     let teacher_dir = std::path::Path::new("models/teacher");
     if !teacher_dir.exists() {
         println!("❌ models/teacher/ not found");
         return Ok(());
     }
-
-    let mut teacher_paths: Vec<std::path::PathBuf> = Vec::new();
-    collect_teacher_files(teacher_dir, &mut teacher_paths);
-
-    if teacher_paths.is_empty() {
+    
+    let mut all_teacher_paths: Vec<std::path::PathBuf> = Vec::new();
+    collect_teacher_files(teacher_dir, &mut all_teacher_paths);
+    
+    if all_teacher_paths.is_empty() {
         println!("❌ No safetensors found in models/teacher/");
         return Ok(());
     }
-
-    // ✅ ترتيب curriculum: الأصغر أولاً (الأبسط)
-    teacher_paths.sort_by_key(|p| std::fs::metadata(p)
-        .map(|m| m.len()).unwrap_or(0));
-
-    println!("\n📂 Found {} teacher(s):", teacher_paths.len());
-    for p in &teacher_paths {
+    
+    // ✅ تحليل المعلمين المطلوبين من سطر الأوامر
+    let requested_teachers = parse_teacher_args(args);
+    
+    // ✅ تصفية المعلمين حسب الطلب (إنشاء نسخة جديدة)
+    let mut filtered_paths: Vec<std::path::PathBuf> = if let Some(teachers_list) = requested_teachers {
+        println!("\n🎯 Filtering teachers: {:?}", teachers_list);
+        let mut filtered = Vec::new();
+        for path in &all_teacher_paths {  // استخدم & لتجنب move
+            let teacher_name = path.parent()
+                .and_then(|p| p.file_name())
+                .and_then(|s| s.to_str())
+                .unwrap_or("unknown")
+                .to_string();
+            if teachers_list.iter().any(|req| teacher_name.contains(req)) {
+                filtered.push(path.clone());
+            }
+        }
+        if filtered.is_empty() {
+            println!("⚠️  No matching teachers found. Using all teachers.");
+            all_teacher_paths.clone()  // استخدم clone() بدلاً من move
+        } else {
+            println!("   ✅ Selected {} teachers", filtered.len());
+            filtered
+        }
+    } else {
+        all_teacher_paths.clone()  // استخدم clone() بدلاً من move
+    };
+    
+    // ✅ ترتيب حسب الحجم (الأصغر أولاً للـ Curriculum Learning)
+    filtered_paths.sort_by_key(|p| std::fs::metadata(p).map(|m| m.len()).unwrap_or(0));
+    
+    println!("\n📂 Found {} teacher(s):", filtered_paths.len());
+    for p in &filtered_paths {
         let mb = std::fs::metadata(p).map(|m| m.len() as f64 / 1_048_576.0).unwrap_or(0.0);
-        println!("   📄 {} ({:.1} MB)", p.file_name().unwrap().to_string_lossy(), mb);
+        let name = p.parent().and_then(|p| p.file_name()).unwrap_or_default();
+        println!("   📄 {} ({:.1} MB)", name.to_string_lossy(), mb);
     }
+    
 
     // ── تحميل النموذج (مرة واحدة) ───────────────────────────
     let mut varmap = candle_nn::VarMap::new();
@@ -483,7 +543,7 @@ fn distill_runner(
     // ── VocabAligner ────────────────────────────────────────
     println!("\n🔗 Building vocabulary alignments...");
     let aligner = match true_distill::prepare_alignments_from_dir(
-        &teacher_paths,
+        &filtered_paths,  // استخدم filtered_paths بدلاً من teacher_paths
         "models/tokenizer/tokenizer.json",
     ) {
         Ok(a) => a,
@@ -497,7 +557,8 @@ fn distill_runner(
     let mut teachers_and_alignments: Vec<(String, true_distill::AutoTeacher, vocab_aligner::VocabAlignment)>
         = Vec::new();
     
-    for (path, alignment) in teacher_paths.iter().zip(aligner.into_iter()) {
+    for (path, alignment) in filtered_paths.iter().zip(aligner.into_iter()) {  // استخدم filtered_paths
+    // for (path, alignment) in teacher_paths.iter().zip(aligner.into_iter()) {
         let teacher_label = path.parent()
             .and_then(|p| p.file_name())
             .and_then(|s| s.to_str())
@@ -593,29 +654,78 @@ fn signal_extractor(
     use std::io::Write;
 
     println!("══════════════════════════════════════════════════");
-    println!("📡 ZUMAR SIGNAL EXTRACTOR (SIMPLE MODE)");
+    println!("📡 ZUMAR SIGNAL EXTRACTOR");
     println!("══════════════════════════════════════════════════");
 
+    // ١. جمع ملفات المعلمين
     let teacher_dir = std::path::Path::new("models/teacher");
     if !teacher_dir.exists() {
         println!("❌ models/teacher/ not found");
         return Ok(());
     }
 
-    let mut teacher_paths = Vec::new();
-    collect_teacher_files(teacher_dir, &mut teacher_paths);
-    teacher_paths.sort_by_key(|p| std::fs::metadata(p).map(|m| m.len()).unwrap_or(0));
+    let mut all_teacher_paths = Vec::new();
+    collect_teacher_files(teacher_dir, &mut all_teacher_paths);
+    all_teacher_paths.sort_by_key(|p| std::fs::metadata(p).map(|m| m.len()).unwrap_or(0));
 
+    // ✅ تحليل المعلم المطلوب من سطر الأوامر (للاستخراج التسلسلي)
+    let requested_teacher = parse_single_teacher_arg(args);
+    
+    // ✅ تصفية المعلمين حسب الطلب
+    let teacher_paths: Vec<std::path::PathBuf> = if let Some(teacher_name) = requested_teacher {
+        println!("\n🎯 Extracting only teacher: {}", teacher_name);
+        let mut filtered = Vec::new();
+        for path in &all_teacher_paths {
+            let name = path.parent()
+                .and_then(|p| p.file_name())
+                .and_then(|s| s.to_str())
+                .unwrap_or("unknown");
+            if name == teacher_name || name.contains(&teacher_name) {
+                filtered.push(path.clone());
+                break;
+            }
+        }
+        if filtered.is_empty() {
+            println!("   ⚠️  Teacher '{}' not found. Using all teachers.", teacher_name);
+            all_teacher_paths
+        } else {
+            filtered
+        }
+    } else {
+        all_teacher_paths
+    };
+
+    // ٢. تحميل tokenizer الطالب
+    let tokenizer = match ZumarTokenizer::load_or_train(
+        "models/tokenizer/tokenizer.json",
+        "data",
+        50257,
+    ) {
+        Ok(t) => {
+            println!("   ✅ Tokenizer loaded: {} tokens", t.vocab_size());
+            t
+        }
+        Err(e) => {
+            println!("❌ Tokenizer error: {}", e);
+            return Ok(());
+        }
+    };
+
+    // ٣. تحميل نصوص التدريب
     let training_data = data::TrainingData::load(args.get(2).map(|s| s.as_str()));
     let all_texts = training_data.texts.clone();
     println!("   📊 Training texts: {}", all_texts.len());
 
+    // ٤. إنشاء مجلد zlog
     std::fs::create_dir_all("models/zlog")?;
 
+    // ٥. استخراج Logits لكل معلم (أو للمعلم المطلوب فقط)
     for path in &teacher_paths {
         let file_size = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
         if file_size > 700_000_000 {
-            println!("   ⚠️  Skipping {} ({} MB)", path.file_name().unwrap().to_string_lossy(), file_size / 1_048_576);
+            println!("   ⚠️  Skipping {} ({} MB)", 
+                path.file_name().unwrap().to_string_lossy(),
+                file_size / 1_048_576);
             continue;
         }
 
@@ -625,20 +735,29 @@ fn signal_extractor(
             .unwrap_or("unknown")
             .to_string();
 
+        // ✅ التحقق مما إذا كان الملف موجوداً بالفعل (لتجنب إعادة الاستخراج)
+        let output_path = format!("models/zlog/{}.zlog", teacher_name);
+        if std::path::Path::new(&output_path).exists() && !force_extract(args) {
+            println!("\n⏭️  Skipping '{}' (zlog already exists. Use --force to re-extract)", teacher_name);
+            continue;
+        }
+
         println!("\n🧠 Extracting from '{}'...", teacher_name);
 
         let teacher = match AutoTeacher::load(path.to_str().unwrap(), device) {
             Ok(t) => t,
-            Err(e) => { println!("   ❌ Cannot load: {}", e); continue; }
+            Err(e) => {
+                println!("   ❌ Cannot load: {}", e);
+                continue;
+            }
         };
 
         let real_vocab_size = teacher.config.vocab_size;
         println!("   📚 Teacher vocab size: {}", real_vocab_size);
 
-        let output_path = format!("models/zlog/{}.zlog", teacher_name);
         let mut file = std::fs::File::create(&output_path)?;
-
-        // كتابة header: magic + عدد النصوص + حجم المفردات
+        
+        // كتابة header
         file.write_all(b"ZLOG")?;
         file.write_all(&(all_texts.len() as u32).to_le_bytes())?;
         file.write_all(&(real_vocab_size as u32).to_le_bytes())?;
@@ -661,10 +780,10 @@ fn signal_extractor(
                 logits_raw
             };
 
-            // كتابة طول logits (4 بايت) ثم البيانات (2 بايت لكل قيمة)
             file.write_all(&(logits.len() as u32).to_le_bytes())?;
             for &val in &logits {
-                file.write_all(&f16::from_f32(val).to_bits().to_le_bytes())?;
+                let f16_val = f16::from_f32(val);
+                file.write_all(&f16_val.to_bits().to_le_bytes())?;
             }
 
             entry_count += 1;
@@ -673,9 +792,59 @@ fn signal_extractor(
             }
         }
 
-        println!("   ✅ Saved: {} ({} entries, vocab={})", output_path, entry_count, real_vocab_size);
+        println!("   ✅ Saved: {} ({} entries)", output_path, entry_count);
     }
 
     println!("\n🎉 Signal extraction complete!");
+    println!("   📂 Files saved in models/zlog/");
+    println!("   🚀 Now run: cargo run -- distill 10 /data");
     Ok(())
+}
+
+
+/// تحليل وسائط سطر الأوامر لاستخراج قائمة المعلمين المطلوبين
+fn parse_teacher_args(args: &[String]) -> Option<Vec<String>> {
+    // البحث عن --teachers متبوعاً بقائمة المعلمين
+    for i in 0..args.len() {
+        if args[i] == "--teachers" && i + 1 < args.len() {
+            let teachers_str = &args[i + 1];
+            let teachers: Vec<String> = teachers_str
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+            if !teachers.is_empty() {
+                return Some(teachers);
+            }
+        }
+    }
+    None
+}
+
+fn match_teacher_name(teacher_folder: &str, pattern: &str) -> bool {
+    let pattern_lower = pattern.to_lowercase();
+    let folder_lower = teacher_folder.to_lowercase();
+    
+    // مطابقة تامة أو جزئية
+    folder_lower == pattern_lower || 
+    folder_lower.contains(&pattern_lower) ||
+    pattern_lower.contains(&folder_lower)
+}
+
+/// تحليل وسائط سطر الأوامر لاستخراج معلم واحد محدد
+fn parse_single_teacher_arg(args: &[String]) -> Option<String> {
+    for i in 0..args.len() {
+        if args[i] == "--teacher" && i + 1 < args.len() {
+            return Some(args[i + 1].clone());
+        }
+        if args[i] == "-t" && i + 1 < args.len() {
+            return Some(args[i + 1].clone());
+        }
+    }
+    None
+}
+
+/// التحقق من وجود خيار --force
+fn force_extract(args: &[String]) -> bool {
+    args.iter().any(|arg| arg == "--force" || arg == "-f")
 }
