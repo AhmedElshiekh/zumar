@@ -23,17 +23,17 @@ pub struct VocabAlignment {
 }
 
 impl VocabAlignment {
-    /// عدد الكلمات المشتركة
+      /// عدد الكلمات المشتركة
     pub fn overlap_size(&self) -> usize {
         self.shared_words.len()
     }
 
-    /// هل التغطية كافية للتقطير؟
+      /// هل التغطية كافية للتقطير؟
     pub fn is_usable(&self) -> bool {
         self.overlap_size() >= 1000 && self.teacher_coverage >= 0.3
     }
 
-    /// تقرير التغطية
+      /// تقرير التغطية
     pub fn report(&self) -> String {
         format!(
             "Shared: {} tokens | Teacher coverage: {:.1}% | Student coverage: {:.1}% | Weight: {:.3}",
@@ -68,7 +68,7 @@ impl VocabAlignment {
     }
 
     /// ✅ Re-normalized softmax على الـ projected logits
-    /// ضروري لأن الـ gather يُفقد بعض الـ probability mass
+      /// ضروري لأن الـ gather يُفقد بعض الـ probability mass
     pub fn softmax_projected(logits: &[f32], temperature: f32) -> Vec<f32> {
         if logits.is_empty() { return vec![]; }
 
@@ -153,6 +153,85 @@ impl VocabAlignment {
         }
     
         Ok(kl_scaled)
+    }
+    
+      /// تقليص عدد الكلمات المشتركة لتسريع حسابات KL
+    pub fn truncate(&mut self, max_size: usize) {
+        if self.teacher_ids.len() > max_size {
+            self.teacher_ids.truncate(max_size);
+            self.student_ids.truncate(max_size);
+            self.shared_words.truncate(max_size);
+        }
+    }
+    
+    /// Cross Entropy Loss بدلاً من KL (أسرع بكثير)
+    pub fn cross_entropy_loss(
+        &self,
+        teacher_logits: &[f32],
+        student_logits: &Tensor,
+        temperature: f32,
+        device: &Device,
+    ) -> Result<Tensor> {
+        if self.teacher_ids.is_empty() {
+            return Ok(Tensor::zeros((), candle_core::DType::F32, device)?);
+        }
+    
+        let temp = temperature as f64;
+        
+        // Teacher: softmax للحصول على التوزيع الاحتمالي
+        let t_proj: Vec<f32> = self.teacher_ids
+            .iter()
+            .map(|&id| teacher_logits.get(id as usize).copied().unwrap_or(f32::NEG_INFINITY))
+            .collect();
+        let t_tensor = Tensor::from_vec(t_proj, self.teacher_ids.len(), device)?;
+        let t_probs = candle_nn::ops::softmax(&(&t_tensor / temp)?, 0)?;
+        
+        // أخذ فئة (class) ذات أعلى احتمال من المعلم (Hard Distillation)
+        let teacher_class = t_probs.argmax(0)?.to_scalar::<u32>()?;
+        
+        // Student: استخراج logits للكلمات المشتركة
+        let s_ids = Tensor::new(self.student_ids.as_slice(), device)?;
+        let s_proj = student_logits.index_select(&s_ids, 0)?;
+        
+        // ✅ التصحيح: target يجب أن يكون [1] وليس [1, 1]
+        let target = Tensor::new(&[teacher_class], device)?;
+        
+        // Cross Entropy Loss
+        let loss = candle_nn::loss::cross_entropy(
+            &s_proj.unsqueeze(0)?,  // input: [1, vocab_size]
+            &target,                 // target: [1]
+        )?;
+        
+        Ok(loss.reshape(&[])?)
+    }
+    
+    pub fn mse_loss(
+        &self,
+        teacher_logits: &[f32],
+        student_logits: &Tensor,
+        temperature: f32,
+        device: &Device,
+    ) -> Result<Tensor> {
+        let temp = temperature as f64;
+        
+        // Teacher projection
+        let t_proj: Vec<f32> = self.teacher_ids
+            .iter()
+            .map(|&id| teacher_logits.get(id as usize).copied().unwrap_or(0.0))
+            .collect();
+        let t_tensor = Tensor::from_vec(t_proj, self.teacher_ids.len(), device)?;
+        let t_scaled = (&t_tensor / temp)?;
+        
+        // Student projection
+        let s_ids = Tensor::new(self.student_ids.as_slice(), device)?;
+        let s_proj = student_logits.index_select(&s_ids, 0)?;
+        let s_scaled = (&s_proj / temp)?;
+        
+        // MSE Loss (أسرع بكثير من KL)
+        let diff = (&t_scaled - &s_scaled)?;
+        let loss = diff.powf(2.0)?.mean_all()?;
+        
+        Ok(loss.reshape(&[])?)
     }
 }
 

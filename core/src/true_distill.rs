@@ -175,12 +175,27 @@ impl TrueDistiller {
         let mut fisher_losses: Vec<Tensor> = Vec::new();
     
         // تحميل offline cache
+        // let zlog_path = format!("models/zlog/{}.zlog", teacher_name);
+        // let offline_cache = if Path::new(&zlog_path).exists() {
+        //     println!("   📂 Offline mode using {}", zlog_path);
+        //     match load_zlog(&zlog_path, teacher.config.vocab_size) {
+        //         Ok(c) => {
+        //             println!("   ✅ Loaded {} entries (vocab={})", c.len(), teacher.config.vocab_size);
+        //             Some(c)
+        //         }
+        //         Err(e) => {
+        //             println!("   ⚠️  Zlog error: {} -> online", e);
+        //             None
+        //         }
+        //     }
+        // } else { None };
+        // ── تحميل Zlog offline ──
         let zlog_path = format!("models/zlog/{}.zlog", teacher_name);
-        let offline_cache = if Path::new(&zlog_path).exists() {
+        let offline_cache: Option<Vec<Vec<f32>>> = if Path::new(&zlog_path).exists() {
             println!("   📂 Offline mode using {}", zlog_path);
             match load_zlog(&zlog_path, teacher.config.vocab_size) {
                 Ok(c) => {
-                    println!("   ✅ Loaded {} entries (vocab={})", c.len(), teacher.config.vocab_size);
+                    println!("   ✅ Loaded {} entries", c.len());
                     Some(c)
                 }
                 Err(e) => {
@@ -194,34 +209,60 @@ impl TrueDistiller {
             let mut loss_sum = 0.0f32;
             let mut step_count = 0usize;
             let mut accum_kl: Option<Tensor> = None;
-    
-            for text in data.iter() {
+
+            for (idx, text) in data.iter().enumerate() {
                 // 1. ترميز الطالب
                 let zumar_tokens = match tokenizer.encode_ids(text) {
                     Ok(t) if t.len() >= 2 => t,
                     _ => continue,
                 };
                 let seq_len = zumar_tokens.len();
-    
-                // 2. الحصول على logits المعلم (مرة واحدة لكل نص)
+            
+                // 2. الحصول على logits المعلم بالترتيب
                 let teacher_logits = if let Some(ref cache) = offline_cache {
-                    let clean_text = text.trim();
-                    let hash = {
-                        let mut h = 0xcbf29ce484222325u64;
-                        for &b in clean_text.as_bytes() {
-                            h ^= b as u64;
-                            h = h.wrapping_mul(0x100000001b3);
-                        }
-                        h
-                    };
-                    match cache.get(&hash) {
-                        Some(l) => l.clone(),
-                        None => continue,
-                    }
+                    if idx >= cache.len() { continue; }
+                    cache[idx].clone()
+                // } else {
+                // let teacher_logits = if let Some(ref logits_vec) = offline_logits {
+                //     if idx < logits_vec.len() && !logits_vec[idx].is_empty() {
+                //         logits_vec[idx].clone()
+                //     } else {
+                //         continue
+                //     }
                 } else {
                     let teacher_tokens = teacher.tokenize(text);
                     LOGITS_CACHE.with(|c| c.borrow_mut().get_or_compute(&teacher_tokens, teacher))?
                 };
+            
+                // ... باقي الكود كما هو ...
+            // }
+            // for text in data.iter() {
+            //     // 1. ترميز الطالب
+            //     let zumar_tokens = match tokenizer.encode_ids(text) {
+            //         Ok(t) if t.len() >= 2 => t,
+            //         _ => continue,
+            //     };
+            //     let seq_len = zumar_tokens.len();
+    
+            //     // 2. الحصول على logits المعلم (مرة واحدة لكل نص)
+            //     let teacher_logits = if let Some(ref cache) = offline_cache {
+            //         let clean_text = text.trim();
+            //         let hash = {
+            //             let mut h = 0xcbf29ce484222325u64;
+            //             for &b in clean_text.as_bytes() {
+            //                 h ^= b as u64;
+            //                 h = h.wrapping_mul(0x100000001b3);
+            //             }
+            //             h
+            //         };
+            //         match cache.get(&hash) {
+            //             Some(l) => l.clone(),
+            //             None => continue,
+            //         }
+            //     } else {
+            //         let teacher_tokens = teacher.tokenize(text);
+            //         LOGITS_CACHE.with(|c| c.borrow_mut().get_or_compute(&teacher_tokens, teacher))?
+            //     };
     
                 // 3. forward الطالب على التسلسل كاملاً (مرة واحدة)
                 let input_ids = Tensor::new(zumar_tokens.as_slice(), &self.device)?.unsqueeze(0)?;
@@ -233,12 +274,25 @@ impl TrueDistiller {
                     .squeeze(0)?
                     .squeeze(0)?;
     
-                let kl = alignment.kl_divergence(
+                // let kl = alignment.kl_divergence(
+                //     &teacher_logits,
+                //     &last_student_logit,
+                //     self.config.temperature,
+                //     &self.device,
+                // )?;
+                // let kl = alignment.cross_entropy_loss(
+                //     &teacher_logits,
+                //     &last_student_logit,
+                //     self.config.temperature,
+                //     &self.device,
+                // )?;
+                let kl = alignment.mse_loss(
                     &teacher_logits,
                     &last_student_logit,
                     self.config.temperature,
                     &self.device,
                 )?;
+                
                 let kl_val = kl.to_scalar::<f32>()?;
                 loss_sum += kl_val;
                 total_tokens += (seq_len - 1) as u64; // تقديري
@@ -339,7 +393,10 @@ pub fn prepare_alignments_from_dir(
             println!("   ⚠️  No tokenizer.json for '{}'", name);
             (HashMap::new(), 50257)
         };
-        alignments.push(aligner.align(&teacher_vocab, t_size, &name));
+        // alignments.push(aligner.align(&teacher_vocab, t_size, &name));
+        let mut alignment = aligner.align(&teacher_vocab, t_size, &name);
+        alignment.truncate(1000);   // أضف هذا السطر
+        alignments.push(alignment);
     }
     Ok(alignments)
 }
@@ -641,37 +698,78 @@ impl AutoTeacher {
 // ════════════════════════════════════════════════════════════
 // load_zlog — تحميل logits من ملف مع التحقق من حجم المفردات
 // ════════════════════════════════════════════════════════════
-pub fn load_zlog(path: &str, expected_vocab_size: usize) -> Result<HashMap<u64, Vec<f32>>> {
+pub fn load_zlog(path: &str, expected_vocab_size: usize) -> Result<Vec<Vec<f32>>> {
     let data = std::fs::read(path)
         .map_err(|e| candle_core::Error::Msg(format!("Cannot read zlog: {}", e)))?;
     
-    let mut cache = HashMap::new();
-    let mut offset = 0;
+    if data.len() < 12 || &data[0..4] != b"ZLOG" {
+        return Err(candle_core::Error::Msg("Invalid zlog format".to_string()));
+    }
     
-    while offset + 12 <= data.len() {
-        let key_hash = u64::from_le_bytes(data[offset..offset+8].try_into().unwrap());
-        offset += 8;
-        
+    let num_entries = u32::from_le_bytes(data[4..8].try_into().unwrap()) as usize;
+    let stored_vocab_size = u32::from_le_bytes(data[8..12].try_into().unwrap()) as usize;
+    
+    if stored_vocab_size != expected_vocab_size {
+        return Err(candle_core::Error::Msg(format!(
+            "Vocab mismatch: {} != {}", stored_vocab_size, expected_vocab_size
+        )));
+    }
+    
+    let mut offset = 12;
+    let mut logits_list = Vec::with_capacity(num_entries);
+    
+    for _ in 0..num_entries {
+        if offset + 4 > data.len() { break; }
         let len = u32::from_le_bytes(data[offset..offset+4].try_into().unwrap()) as usize;
         offset += 4;
         
         if len != expected_vocab_size {
-            return Err(candle_core::Error::Msg(format!(
-                "Vocab mismatch: file has {} but expected {}", len, expected_vocab_size
-            )));
+            return Err(candle_core::Error::Msg("Corrupted entry length".to_string()));
         }
         
+        if offset + len * 2 > data.len() { break; }
+        
+        let mut logits = Vec::with_capacity(len);
+        for _ in 0..len {
+            let bits = u16::from_le_bytes(data[offset..offset+2].try_into().unwrap());
+            logits.push(half::f16::from_bits(bits).to_f32());
+            offset += 2;
+        }
+        logits_list.push(logits);
+    }
+    
+    Ok(logits_list)
+}
+
+pub fn load_zlog_sequential(path: &str, expected_vocab_size: usize) -> Result<Vec<Vec<f32>>> {
+    let data = std::fs::read(path)
+        .map_err(|e| candle_core::Error::Msg(format!("Cannot read zlog: {}", e)))?;
+    if data.len() < 4 {
+        return Err(candle_core::Error::Msg("File too short".into()));
+    }
+    let mut offset = 0;
+    let num_texts = u32::from_le_bytes(data[offset..offset+4].try_into().unwrap()) as usize;
+    offset += 4;
+    let mut all_logits = Vec::with_capacity(num_texts);
+    for _ in 0..num_texts {
+        if offset + 4 > data.len() { break; }
+        let len = u32::from_le_bytes(data[offset..offset+4].try_into().unwrap()) as usize;
+        offset += 4;
+        if len == 0 {
+            all_logits.push(Vec::new());
+            continue;
+        }
+        if len != expected_vocab_size {
+            return Err(candle_core::Error::Msg(format!("Vocab mismatch: {} != {}", len, expected_vocab_size)));
+        }
         let mut logits = Vec::with_capacity(len);
         for _ in 0..len {
             if offset + 2 > data.len() { break; }
             let bits = u16::from_le_bytes(data[offset..offset+2].try_into().unwrap());
-            let val = half::f16::from_bits(bits).to_f32();
-            logits.push(val);
+            logits.push(half::f16::from_bits(bits).to_f32());
             offset += 2;
         }
-        
-        cache.insert(key_hash, logits);
+        all_logits.push(logits);
     }
-    
-    Ok(cache)
+    Ok(all_logits)
 }
