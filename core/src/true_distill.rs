@@ -10,9 +10,24 @@ use std::path::Path;
 use std::cell::RefCell;
 use half::f16;
 
-const EWC_PATH:   &str = "models/zumar-v1/ewc_state.json";
-const CKPT_PATH:  &str = "models/zumar-v1/distill_checkpoint.json";
-const MODEL_PATH: &str = "models/zumar-v1/model.safetensors";
+use crate::layers::config::ModelConfig;
+
+// const EWC_PATH:   &str = "models/zumar-v1/ewc_state.json";
+// const CKPT_PATH:  &str = "models/zumar-v1/distill_checkpoint.json";
+// const MODEL_PATH: &str = "models/zumar-v1/model.safetensors";
+// إزالة الثوابت الثابتة واستبدالها بدوال
+
+pub fn get_ewc_path(output_dir: &str) -> String {
+    format!("{}/ewc_state.json", output_dir)
+}
+
+pub fn get_ckpt_path(output_dir: &str) -> String {
+    format!("{}/distill_checkpoint.json", output_dir)
+}
+
+pub fn get_model_path(output_dir: &str) -> String {
+    format!("{}/model.safetensors", output_dir)
+}
 
 // ──────────────────────────────────────────────────────────────
 // TeacherLogitsCache (كما هي)
@@ -114,15 +129,20 @@ impl TrueDistiller {
 
     pub fn distill_multi(
         &self,
-        student:   &mut ZumarModel,
-        varmap:    &VarMap,
-        teachers:  &[(String, AutoTeacher, VocabAlignment)],
-        data:      &[String],
+        student: &mut ZumarModel,
+        varmap: &VarMap,
+        teachers: &[(String, AutoTeacher, VocabAlignment)],
+        data: &[String],
         tokenizer: &ZumarTokenizer,
+        output_dir: &str,  // معامل جديد
     ) -> Result<()> {
-        let mut ewc        = EWC::load(EWC_PATH, self.config.ewc_lambda)?;
-        let mut checkpoint = DistillCheckpoint::load(CKPT_PATH)?;
-    
+        let ewc_path = get_ewc_path(output_dir);
+        let ckpt_path = get_ckpt_path(output_dir);
+        let model_path = get_model_path(output_dir);
+        
+        let mut ewc = EWC::load(&ewc_path, self.config.ewc_lambda)?;
+        let mut checkpoint = DistillCheckpoint::load(&ckpt_path)?;
+
         println!("\n{}", "═".repeat(60));
         println!("🧬 MULTI-TEACHER DISTILLATION (Optimized)");
         println!("   Teachers: {}  |  Samples: {}", teachers.len(), data.len());
@@ -140,7 +160,13 @@ impl TrueDistiller {
             println!("\n🧬 Teacher {}/{}: {}", idx + 1, teachers.len(), name);
             println!("   {}", alignment.report());
     
-            self.distill_one(student, varmap, name, teacher, alignment, &mut ewc, &mut checkpoint, data, tokenizer)?;
+            // self.distill_one(student, varmap, name, teacher, alignment, &mut ewc, &mut checkpoint, data, tokenizer)?;
+
+            self.distill_one(
+                student, varmap, name, teacher, alignment,
+                &mut ewc, &mut checkpoint, data, tokenizer,
+                output_dir, &ewc_path, &ckpt_path, &model_path,
+            )?;
         }
         Ok(())
     }
@@ -156,6 +182,10 @@ impl TrueDistiller {
         checkpoint: &mut DistillCheckpoint,
         data: &[String],
         tokenizer: &ZumarTokenizer,
+        output_dir: &str,
+        ewc_path: &str,
+        ckpt_path: &str,
+        model_path: &str,
     ) -> Result<()> {
         let start_epoch = checkpoint.epoch;
         let lr = ewc.recommended_lr(self.config.base_lr);
@@ -165,7 +195,7 @@ impl TrueDistiller {
         if !alignment.is_usable() {
             println!("   ⚠️  Skipping (overlap <1000)");
             checkpoint.mark_teacher_done(teacher_name);
-            checkpoint.save(CKPT_PATH)?;
+            checkpoint.save(&get_ckpt_path(output_dir))?;
             return Ok(());
         }
     
@@ -274,24 +304,24 @@ impl TrueDistiller {
                     .squeeze(0)?
                     .squeeze(0)?;
     
-                // let kl = alignment.kl_divergence(
-                //     &teacher_logits,
-                //     &last_student_logit,
-                //     self.config.temperature,
-                //     &self.device,
-                // )?;
+                let kl = alignment.kl_divergence(
+                    &teacher_logits,
+                    &last_student_logit,
+                    self.config.temperature,
+                    &self.device,
+                )?;
                 // let kl = alignment.cross_entropy_loss(
                 //     &teacher_logits,
                 //     &last_student_logit,
                 //     self.config.temperature,
                 //     &self.device,
                 // )?;
-                let kl = alignment.mse_loss(
-                    &teacher_logits,
-                    &last_student_logit,
-                    self.config.temperature,
-                    &self.device,
-                )?;
+                // let kl = alignment.mse_loss(
+                //     &teacher_logits,
+                //     &last_student_logit,
+                //     self.config.temperature,
+                //     &self.device,
+                // )?;
                 
                 let kl_val = kl.to_scalar::<f32>()?;
                 loss_sum += kl_val;
@@ -335,9 +365,9 @@ impl TrueDistiller {
     
             if (epoch + 1) % self.config.save_every == 0 || epoch == self.config.epochs - 1 {
                 std::fs::create_dir_all("models/zumar-v1").ok();
-                varmap.save(MODEL_PATH)?;
-                ewc.save(EWC_PATH)?;
-                checkpoint.save(CKPT_PATH)?;
+                varmap.save(&get_model_path(output_dir))?;
+                ewc.save(&get_ewc_path(output_dir))?;
+                checkpoint.save(&get_ckpt_path(output_dir))?;
                 fisher_losses.truncate(10);
             }
     
@@ -361,9 +391,9 @@ impl TrueDistiller {
         if let Some(loss) = fisher_losses.first() {
             ewc.update(varmap, &[loss.clone()], teacher_name, self.config.epochs, &self.device)?;
         }
-        ewc.save(EWC_PATH)?;
+        ewc.save(&get_ewc_path(output_dir))?;
         checkpoint.mark_teacher_done(teacher_name);
-        checkpoint.save(CKPT_PATH)?;
+        checkpoint.save(&get_ckpt_path(output_dir))?;
     
         println!("   ⏱ Total: {:.1}s", start.elapsed().as_secs_f64());
         Ok(())
@@ -546,7 +576,7 @@ impl AutoTeacher {
     }
 
     // ════════════════════════════════════════════════════════
-    // دوال مساعدة للـ causal attention
+     // دوال مساعدة للـ causal attention
     // ════════════════════════════════════════════════════════
     fn layer_norm_3d(&self, x: &Tensor, prefix: &str, a: &str, b: &str) -> Result<Tensor> {
         for (wk, bk) in &[
@@ -693,7 +723,40 @@ impl AutoTeacher {
         }
         TeacherConfig { embedding_key: "wte.weight".into(), num_layers: 6, hidden_dim: 768, vocab_size: 50257, arch_type: "unknown".into(), prefix_format: "h.{i}".into() }
     }
+
+      /// اكتشاف أبعاد المعلم تلقائياً
+    pub fn detect_config(&self) -> ModelConfig {
+        ModelConfig {
+            vocab_size: self.config.vocab_size,
+            hidden_size: self.config.hidden_dim,
+            num_layers: self.config.num_layers,
+            num_heads: self.config.hidden_dim / 64,
+            kv_heads: (self.config.hidden_dim / 64) / 4,
+            num_experts: 8, // تقدير
+            top_k: 2,
+            max_seq_len: 4096,
+            rope_theta: 10000.0,
+        }
+    }
+    
+      /// تحويل logits المعلم إلى حجم الطالب
+    pub fn adapt_logits(&self, logits: &[f32], target_vocab: usize) -> Vec<f32> {
+        let teacher_vocab = self.config.vocab_size;
+        
+        if teacher_vocab == target_vocab {
+            logits.to_vec()
+        } else if teacher_vocab > target_vocab {
+            // اقتصاص إذا كان المعلم أكبر
+            logits[..target_vocab.min(logits.len())].to_vec()
+        } else {
+            // حشو بالأصفار إذا كان الطالب أكبر
+            let mut adapted = vec![0.0f32; target_vocab];
+            adapted[..logits.len()].copy_from_slice(logits);
+            adapted
+        }
+    }
 }
+
 
 // ════════════════════════════════════════════════════════════
 // load_zlog — تحميل logits من ملف مع التحقق من حجم المفردات
@@ -773,3 +836,4 @@ pub fn load_zlog_sequential(path: &str, expected_vocab_size: usize) -> Result<Ve
     }
     Ok(all_logits)
 }
+

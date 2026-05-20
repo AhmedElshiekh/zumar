@@ -6,6 +6,8 @@ pub mod snn;
 pub mod vocab_aligner;
 pub mod ewc;
 pub mod lora;
+pub mod config;
+
 
 use crate::layers::bitlinear::ZumarBitLinear;
 use crate::layers::moe::ZumarMoE;
@@ -13,6 +15,9 @@ use crate::layers::attention::ZumarFlashAttention;
 use candle_core::{Tensor, Result, Device, DType};
 use candle_nn::{Module, VarBuilder, Embedding, LayerNorm};
 use std::collections::HashMap;
+// use crate::layers::config::ModelConfig;
+// use crate::layers::ModelConfig;
+use config::ModelConfig;
 
 pub struct ZumarBlock {
     pub pre_norm:  LayerNorm,
@@ -344,4 +349,64 @@ fn load_packed_embedding(
     // ✅ F32 وليس F16 — يتوافق مع ZumarBitLinear وبقية الطبقات
     let tensor = Tensor::from_vec(weights, (vocab_size, hidden_size), device)?;
     Ok(Embedding::new(tensor, hidden_size))
+}
+
+
+/// نموذج Zumar ديناميكي (يتكيف مع أي حجم)
+pub struct ZumarModelDynamic {
+    pub config: ModelConfig,
+    pub embedding: Embedding,
+    pub layers: Vec<ZumarBlock>,
+    pub final_norm: LayerNorm,
+    pub lm_head: ZumarBitLinear,
+}
+
+impl ZumarModelDynamic {
+    pub fn new(config: ModelConfig, vs: VarBuilder) -> Result<Self> {
+        let in_dim = config.hidden_size;
+        let num_experts = config.num_experts;
+        let top_k = config.top_k;
+        let n_heads = config.num_heads;
+        
+        let embedding = candle_nn::embedding(config.vocab_size, in_dim, vs.pp("model.embed_tokens"))?;
+        
+        let mut layers = Vec::with_capacity(config.num_layers);
+        for i in 0..config.num_layers {
+            layers.push(ZumarBlock::new(
+                in_dim, num_experts, top_k, n_heads,
+                vs.pp(format!("model.layers.{}", i)),
+            )?);
+        }
+        
+        let final_norm = candle_nn::layer_norm(in_dim, 1e-5, vs.pp("model.norm"))?;
+        let lm_head = ZumarBitLinear::new(in_dim, config.vocab_size, vs.pp("lm_head"))?;
+        
+        Ok(Self { config, embedding, layers, final_norm, lm_head })
+    }
+    
+    pub fn forward_sequence(&mut self, input_ids: &Tensor) -> Result<Tensor> {
+        let emb = self.embedding.forward(input_ids)?;
+        let mut h = emb;
+        for layer in &mut self.layers {
+            h = layer.forward(&h)?;
+        }
+        h = self.final_norm.forward(&h)?;
+        self.lm_head.forward(&h)
+    }
+    
+    pub fn embed(&self, token_id: u32, device: &Device) -> Result<Tensor> {
+        let input_id = Tensor::new(&[token_id], device)?;
+        let emb = self.embedding.forward(&input_id)?;
+        emb.unsqueeze(0)
+    }
+    
+    pub fn forward(&mut self, x: &Tensor) -> Result<Tensor> {
+        let x = if x.rank() == 2 { x.unsqueeze(0)? } else { x.clone() };
+        let mut h = x;
+        for layer in &mut self.layers {
+            h = layer.forward(&h)?;
+        }
+        h = self.final_norm.forward(&h)?;
+        self.lm_head.forward(&h)
+    }
 }

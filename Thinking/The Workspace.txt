@@ -16,6 +16,9 @@ zumar/
 │   │   │   ├── zumar_block.rs
 │   │   │   ├── packing.rs
 │   │   │   ├── moe.rs
+│   │   │   ├── ewc.rs
+│   │   │   ├── vocab_aligner.rs
+│   │   │   ├── lora.rs
 │   │   │   └── mamba.rs       <-- معمارية Mamba
 │   │   │ 
 │   │   ├── kernels/           <-- مجلد كود CUDA 
@@ -28,6 +31,10 @@ zumar/
 │   │   ├── routing.rs
 │   │   ├── tokenizer.rs
 │   │   ├── train.rs
+│   │   ├── true_distill.rs
+│   │   ├── data.rs
+│   │   ├── rag.rs
+│   │   ├── distill.rs
 │   │   └── main.rs            <-- نقطة الانطلاق
 │   │   
 │   ├── weights
