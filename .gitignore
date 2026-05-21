@@ -3,3 +3,4 @@
 *.gguf
 /data
 /models/teacher/*
+/models/*
