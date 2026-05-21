@@ -1,0 +1,14 @@
+{
+  "teacher_index": 4,
+  "teacher_name": "",
+  "epoch": 0,
+  "total_epochs": 2020,
+  "best_loss": 0.07161005,
+  "current_lr": 0.001,
+  "done_teachers": [
+    "distilgpt2",
+    "distilgpt2",
+    "other",
+    "distilgpt2"
+  ]
+}

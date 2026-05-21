@@ -1,0 +1,4 @@
+# /teacher/*
+# /zlog/*
+*.safetensors
+*.zlogl
